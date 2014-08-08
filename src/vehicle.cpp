@@ -2064,9 +2064,18 @@ int vehicle::total_mass()
     return m/1000;
 }
 
-void vehicle::center_of_mass(int &x, int &y)
+void vehicle::precise_mount_pos(int part, float &x, float &y)
 {
-    float xf = 0, yf = 0;
+    int part_x = parts[part].mount_dx;
+    int part_y = parts[part].mount_dy;
+    float mount_theta = atan2(part_y, part_x) + (face.dir() * M_PI / 180.0);
+    float mount_radius = std::sqrt((part_x * part_x) + (part_y * part_y));
+    x = mount_radius * cos(mount_theta);
+    y = mount_radius * sin(mount_theta);
+}
+
+void vehicle::center_of_mass(float &x, float &y)
+{
     int m_total = total_mass();
     for (int i = 0; i < parts.size(); i++)
     {
@@ -2081,11 +2090,19 @@ void vehicle::center_of_mass(int &x, int &y)
         if (part_flag(i,VPFLAG_BOARDABLE) && parts[i].has_flag(vehicle_part::passenger_flag)) {
             m_part += 81500; // TODO: get real weight
         }
-        xf += parts[i].precalc_dx[0] * m_part / 1000;
-        yf += parts[i].precalc_dy[0] * m_part / 1000;
+        float part_pos_x, part_pos_y;
+        precise_mount_pos(i, part_pos_x, part_pos_y);
+        x += part_pos_x * m_part / 1000;
+        y += part_pos_y * m_part / 1000;
     }
-    xf /= m_total;
-    yf /= m_total;
+    x /= m_total;
+    y /= m_total;
+}
+void vehicle::center_of_mass(int &x, int &y)
+{
+    float xf;
+    float yf;
+    center_of_mass(xf, yf);
     x = int(xf + 0.5); //round to nearest
     y = int(yf + 0.5);
 }
@@ -3032,12 +3049,16 @@ bool vehicle::collision( std::vector<veh_collision> &veh_veh_colls,
         const int dsx = global_x() + dx + parts[p].precalc_dx[1];
         const int dsy = global_y() + dy + parts[p].precalc_dy[1];
         veh_collision coll = part_collision( p, dsx, dsy, just_detect );
-        if( coll.type != veh_coll_nothing && just_detect ) {
-            return true;
-        } else if( coll.type == veh_coll_veh ) {
+        if( coll.type == veh_coll_veh ) {
             veh_veh_colls.push_back( coll );
+            if( just_detect ) {
+                return true;
+            }
         } else if( coll.type != veh_coll_nothing ) { //run over someone?
             veh_misc_colls.push_back(coll);
+            if( just_detect ) {
+                return true;
+            }
             if( can_move ) {
                 imp += coll.imp;
             }

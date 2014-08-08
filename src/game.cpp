@@ -12493,7 +12493,7 @@ bool game::plmove(int dx, int dy)
                 return false;
             }
         }
-
+/*
         float drag_multiplier = 1.0;
         vehicle *grabbed_vehicle = NULL;
         if (u.grab_point.x != 0 || u.grab_point.y != 0) {
@@ -12586,6 +12586,170 @@ bool game::plmove(int dx, int dy)
                         u.grab_point.x = (dx + dxVeh) * (-1);
                         u.grab_point.y = (dy + dyVeh) * (-1);
                     }
+                } else {
+                    add_msg(m_info, _("No vehicle at grabbed point."));
+                    u.grab_point.x = 0;
+                    u.grab_point.y = 0;
+                    u.grab_type = OBJECT_NONE;
+                }
+/*/
+        float drag_multiplier = 1.0;
+        vehicle *grabbed_vehicle = NULL;
+        vehicle_part *grabbed_part = NULL;
+
+        // TODO: would like to be able to have something grabbed at the player's square
+        if (u.grab_point.x != 0 || u.grab_point.y != 0) {
+            // vehicle: pulling, pushing, or moving around the grabbed object.
+            if (u.grab_type == OBJECT_VEHICLE) {
+                grabbed_vehicle = m.veh_at(u.posx + u.grab_point.x, u.posy + u.grab_point.y);
+                if (NULL != grabbed_vehicle) {
+                    int grabbed_part_index = grabbed_vehicle->global_part_at(u.posx + u.grab_point.x, u.posy + u.grab_point.y);
+                    grabbed_part = &grabbed_vehicle->parts[grabbed_part_index];
+                    int gx = grabbed_vehicle->global_x();
+                    int gy = grabbed_vehicle->global_y();
+                    bool is_pushing = ((dx - u.grab_point.x == 0) && (dy - u.grab_point.y == 0));
+                    bool is_pulling = abs(dx - u.grab_point.x) >= 2 || abs(dy - u.grab_point.y) >= 2;
+                    if (!(is_pushing || is_pulling)) {
+                        // player remaining the same distance from the grab point
+                        u.grab_point.x -= dx;
+                        u.grab_point.y -= dy;
+                        // otherwise, player is pushing or pulling
+                    } else if (grabbed_vehicle == veh0) {
+                        // player is attempting to move the vehicle he or she is standing on
+                        add_msg(m_info, _("You can't move %s while standing on it!"), grabbed_vehicle->name.c_str());
+                        return false;
+                    } else {
+                        drag_multiplier += (float)(grabbed_vehicle->total_mass() * 1000) /
+                                           (float)(u.weight_capacity() * 5);
+                        float max_drag = 2.0;
+                        if (drag_multiplier > max_drag) {
+                            add_msg(m_info, _("The %s is too heavy for you to budge!"), grabbed_vehicle->name.c_str());
+                            return false;
+                        }
+
+                        // direction vehicle is moving by the push/pull
+                        int dxVeh;
+                        int dyVeh;
+
+                        if (is_pulling) {
+                            // make vehicle move towards where player is going
+                            dxVeh = dx - u.grab_point.x;
+                            dyVeh = dy - u.grab_point.y;
+                            if (abs(dxVeh) == 2) {
+                                dxVeh /= 2;
+                            }
+                            if (abs(dyVeh) == 2) {
+                                dyVeh /= 2;
+                            }
+                        } else { // pushing
+                            // grabbed part moves in the same direction as the player
+                            dxVeh = dx;
+                            dyVeh = dy;
+                        }
+
+                        // rotate vehicle
+                        int rotate_amt;
+                        {
+                            float center_of_mass_x, center_of_mass_y;
+                            grabbed_vehicle->center_of_mass(center_of_mass_x, center_of_mass_y);
+                            float grabbed_posx, grabbed_posy;
+                            grabbed_vehicle->precise_mount_pos(grabbed_part_index, grabbed_posx, grabbed_posy);
+                            // bearing of the grabbed part from the CoM
+                            float grab_dir = atan2(grabbed_posy - center_of_mass_y,
+                                    grabbed_posx - center_of_mass_x) * 180.0 / M_PI;
+                            if (grab_dir < 0.0) {
+                                grab_dir += 360.0;
+                            }
+                            // direction the vehicle will be moving
+                            float move_dir = atan2(dyVeh, dxVeh) * 180.0 / M_PI;
+                            if (move_dir < 0.0) {
+                                move_dir += 360.0;
+                            }
+                            // amount of counter-clockwise rotation it takes to go from grab_dir to move_dir
+                            int left = ((int) (grab_dir - move_dir + 360.0)) % 360;
+add_msg(m_info, "grab_dir: %d, move_dir: %d, left: %d", (int) grab_dir, (int) move_dir, left);
+                            // actual amount of rotation needed
+                            if (left == 0 || left == 180) {
+                                // do not change direction, CoM is on the same axis as pulling
+                                rotate_amt = 0;
+                            } else if (left < 180) {
+                                // will turn counter-clockwise
+                                rotate_amt = -left;
+                            } else {
+                                // will turn clockwise
+                                rotate_amt = 360 - left;
+                            }
+                            // make the vehicle gradually rotate to that amount
+                            if (rotate_amt < 0) {
+                                rotate_amt = -sqrt(-rotate_amt);
+                            } else {
+                                rotate_amt = sqrt(rotate_amt);
+                            }
+add_msg(m_info, "rotated %d, now %d+%d=%d", rotate_amt, grabbed_vehicle->face.dir(), rotate_amt, grabbed_vehicle->face.dir() + rotate_amt);
+                            // ideally the vehicle should rotate around the grabbed part
+                            // this should fix the vehicle rotating out of the player's hands
+                            dxVeh -= grabbed_part->precalc_dx[1] - grabbed_part->precalc_dx[0];
+                            dyVeh -= grabbed_part->precalc_dy[1] - grabbed_part->precalc_dy[0];
+                        }
+
+                        // now check collisions
+                        {
+                            int imp = 0;
+                            std::vector<veh_collision> veh_veh_colls;
+                            std::vector<veh_collision> veh_misc_colls;
+                            bool can_move = true;
+                            // Set player location to illegal value so it can't collide with vehicle.
+                            int player_prev_x = u.posx;
+                            int player_prev_y = u.posy;
+                            u.posx = 0;
+                            u.posy = 0;
+                            if (grabbed_vehicle->collision(veh_veh_colls, veh_misc_colls, dxVeh, dyVeh,
+                                                           can_move, imp, true)) {
+                                if (!veh_veh_colls.empty()) {
+                                    vehicle* collided = (vehicle*) veh_veh_colls.front().target;
+                                    // TODO u.sees(x, y) to check if the player should know the name of the collided object
+                                    add_msg(_("The %s collides with the %s."),
+                                            grabbed_vehicle->name.c_str(), collided->name.c_str());
+                                } else if (!veh_misc_colls.empty()) {
+                                    // TODO: get name of obstacle, and check if the player can see it
+                                    add_msg(_("The %s collides with an obstacle."), grabbed_vehicle->name.c_str());
+                                }
+                                u.moves -= 10;
+                                u.posx = player_prev_x;
+                                u.posy = player_prev_y;
+                                return false;
+                            }
+                            u.posx = player_prev_x;
+                            u.posy = player_prev_y;
+                        }
+
+                        // now turn the vehicle
+                        grabbed_vehicle->turn(rotate_amt);
+                        grabbed_vehicle->face = grabbed_vehicle->turn_dir;
+                        grabbed_vehicle->precalc_mounts(1, grabbed_vehicle->face.dir());
+
+                        // check for traps under wheels
+                        std::vector<int> wheel_indices =
+                            grabbed_vehicle->all_parts_with_feature( "WHEEL", false );
+                        if (!wheel_indices.empty()) {
+                            for (std::vector<int>::iterator it = wheel_indices.begin(); it != wheel_indices.end(); ++it) {
+                                vehicle_part* wheel = &grabbed_vehicle->parts[*it];
+                                if( one_in(2) ) {
+                                    grabbed_vehicle->handle_trap(
+                                        gx + wheel->precalc_dx[0] + dxVeh,
+                                        gy + wheel->precalc_dy[0] + dyVeh, *it );
+                                }
+                            }
+                        } else {
+                            // TODO no wheels, drag penalty for pulling/pushing vehicles the ground, and make all parts susceptible to traps
+                        }
+
+                        m.displace_vehicle(gx, gy, dxVeh, dyVeh);
+
+                        // shift grab point to where the grabbed part is
+                        u.grab_point.x = (grabbed_vehicle->global_x() + grabbed_part->precalc_dx[0]) - (u.posx + dx);
+                        u.grab_point.y = (grabbed_vehicle->global_y() + grabbed_part->precalc_dy[0]) - (u.posy + dy);
+                    } // end if !(is_pushing || is_pulling)
                 } else {
                     add_msg(m_info, _("No vehicle at grabbed point."));
                     u.grab_point.x = 0;

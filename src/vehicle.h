@@ -452,7 +452,11 @@ public:
 // get the total mass of vehicle, including cargo and passengers
     int total_mass ();
 
-// get center of mass of vehicle; coordinates are precalc_dx[0] and precalc_dy[0]
+// get the exact coordinates of where a part should be; coordinates are translated to face.dir()
+    void precise_mount_pos(int part, float &x, float &y);
+
+// get center of mass of vehicle; coordinates are translated to face.dir()
+    void center_of_mass(float &x, float &y);
     void center_of_mass(int &x, int &y);
 
 // Get combined power of all engines. If fueled == true, then only engines which
