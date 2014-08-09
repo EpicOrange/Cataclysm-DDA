@@ -12647,8 +12647,8 @@ bool game::plmove(int dx, int dy)
                             dyVeh = dy;
                         }
 
-                        // rotate vehicle
-                        int rotate_amt;
+                        // calculate rotation for the vehicle
+                        int rotate_amt; // amount of rotating to do in degrees
                         {
                             float center_of_mass_x, center_of_mass_y;
                             grabbed_vehicle->center_of_mass(center_of_mass_x, center_of_mass_y);
@@ -12657,9 +12657,7 @@ bool game::plmove(int dx, int dy)
                             // bearing of the grabbed part from the CoM
                             float grab_dir = atan2(grabbed_posy - center_of_mass_y,
                                     grabbed_posx - center_of_mass_x) * 180.0 / M_PI;
-                            if (grab_dir < 0.0) {
-                                grab_dir += 360.0;
-                            }
+                            grab_dir = (int) (5 * round(grab_dir/5 + 360)) % 360; // round to nearest 5 degrees and [0,360)
                             // direction the vehicle will be moving
                             float move_dir = atan2(dyVeh, dxVeh) * 180.0 / M_PI;
                             if (move_dir < 0.0) {
@@ -12667,7 +12665,6 @@ bool game::plmove(int dx, int dy)
                             }
                             // amount of counter-clockwise rotation it takes to go from grab_dir to move_dir
                             int left = ((int) (grab_dir - move_dir + 360.0)) % 360;
-add_msg(m_info, "grab_dir: %d, move_dir: %d, left: %d", (int) grab_dir, (int) move_dir, left);
                             // actual amount of rotation needed
                             if (left == 0 || left == 180) {
                                 // do not change direction, CoM is on the same axis as pulling
@@ -12681,15 +12678,12 @@ add_msg(m_info, "grab_dir: %d, move_dir: %d, left: %d", (int) grab_dir, (int) mo
                             }
                             // make the vehicle gradually rotate to that amount
                             if (rotate_amt < 0) {
-                                rotate_amt = -sqrt(-rotate_amt);
+                                // not actually based on any equation
+                                // but it looks good enough in action
+                                rotate_amt = -sqrt(-rotate_amt * 2) - 2;
                             } else {
-                                rotate_amt = sqrt(rotate_amt);
+                                rotate_amt = sqrt(rotate_amt * 2) + 2;
                             }
-add_msg(m_info, "rotated %d, now %d+%d=%d", rotate_amt, grabbed_vehicle->face.dir(), rotate_amt, grabbed_vehicle->face.dir() + rotate_amt);
-                            // ideally the vehicle should rotate around the grabbed part
-                            // this should fix the vehicle rotating out of the player's hands
-                            dxVeh -= grabbed_part->precalc_dx[1] - grabbed_part->precalc_dx[0];
-                            dyVeh -= grabbed_part->precalc_dy[1] - grabbed_part->precalc_dy[0];
                         }
 
                         // now check collisions
@@ -12723,10 +12717,16 @@ add_msg(m_info, "rotated %d, now %d+%d=%d", rotate_amt, grabbed_vehicle->face.di
                             u.posy = player_prev_y;
                         }
 
-                        // now turn the vehicle
-                        grabbed_vehicle->turn(rotate_amt);
+                        // now actually rotate the vehicle
+                        rotate_amt += grabbed_vehicle->face.dir();
+                        rotate_amt = (int) (5 * round(rotate_amt/5 + 360)) % 360; // round to nearest 5 degrees and [0,360)
+                        grabbed_vehicle->turn(rotate_amt - grabbed_vehicle->face.dir());
                         grabbed_vehicle->face = grabbed_vehicle->turn_dir;
                         grabbed_vehicle->precalc_mounts(1, grabbed_vehicle->face.dir());
+                        // ideally the vehicle should rotate around the grabbed part
+                        // this should fix the vehicle rotating out of the player's hands
+                        dxVeh -= grabbed_part->precalc_dx[1] - grabbed_part->precalc_dx[0];
+                        dyVeh -= grabbed_part->precalc_dy[1] - grabbed_part->precalc_dy[0];
 
                         // check for traps under wheels
                         std::vector<int> wheel_indices =
