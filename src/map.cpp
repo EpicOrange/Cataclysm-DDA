@@ -198,7 +198,7 @@ void map::board_vehicle(int x, int y, player *p)
     int part = 0;
     vehicle *veh = veh_at(x, y, part);
     if (!veh) {
-        if(p->grab_point.x == 0 && p->grab_point.y == 0) {
+        if(p->grab_type == OBJECT_NONE) {
             debugmsg ("map::board_vehicle: vehicle not found");
         }
         return;

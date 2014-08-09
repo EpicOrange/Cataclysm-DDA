@@ -10321,20 +10321,27 @@ void game::grab()
 {
     int grabx = 0;
     int graby = 0;
-    if (0 != u.grab_point.x || 0 != u.grab_point.y) {
-        vehicle *veh = m.veh_at(u.posx + u.grab_point.x, u.posy + u.grab_point.y);
-        if (veh) {
-            add_msg(_("You release the %s."), veh->name.c_str());
-        } else if (m.has_furn(u.posx + u.grab_point.x, u.posy + u.grab_point.y)) {
-            add_msg(_("You release the %s."), m.furnname(u.posx + u.grab_point.x,
-                    u.posy + u.grab_point.y).c_str());
+    vehicle *veh = m.veh_at(u.posx + u.grab_point.x, u.posy + u.grab_point.y);
+    if (u.grab_type != OBJECT_NONE) {
+        switch (u.grab_type) {
+        case OBJECT_VEHICLE:
+            if (veh != NULL) {
+                add_msg(_("You release the %s."), veh->name.c_str());
+            }
+            break;
+        case OBJECT_FURNITURE:
+            if (m.has_furn(u.posx + u.grab_point.x, u.posy + u.grab_point.y)) {
+               add_msg(_("You release the %s."), m.furnname(u.posx + u.grab_point.x,
+                       u.posy + u.grab_point.y).c_str());
+            }
+            break;
+        default:
+            debugmsg("Unhandled grab type %d", u.grab_type);
         }
         u.grab_point.x = 0;
         u.grab_point.y = 0;
         u.grab_type = OBJECT_NONE;
-        return;
-    }
-    if (choose_adjacent(_("Grab where?"), grabx, graby)) {
+    } else if (choose_adjacent(_("Grab where?"), grabx, graby)) {
         vehicle *veh = m.veh_at(grabx, graby);
         if (veh != NULL) { // If there's a vehicle, grab that.
             u.grab_point.x = grabx - u.posx;
@@ -10343,7 +10350,7 @@ void game::grab()
             add_msg(_("You grab the %s."), veh->name.c_str());
         } else if (m.has_furn(grabx, graby)) { // If not, grab furniture if present
             if (m.furn_at(grabx, graby).move_str_req < 0) {
-                add_msg(_("You can not grab the %s"), m.furnname(grabx, graby).c_str());
+                add_msg(_("You can not grab the %s."), m.furnname(grabx, graby).c_str());
                 return;
             }
             u.grab_point.x = grabx - u.posx;
@@ -10358,7 +10365,7 @@ void game::grab()
             add_msg(m_info, _("There's nothing to grab there!"));
         }
     } else {
-        add_msg(_("Never Mind."));
+        add_msg(_("Never mind."));
     }
 }
 
@@ -12493,58 +12500,103 @@ bool game::plmove(int dx, int dy)
                 return false;
             }
         }
-/*
+
+        // handle grab
         float drag_multiplier = 1.0;
         vehicle *grabbed_vehicle = NULL;
-        if (u.grab_point.x != 0 || u.grab_point.y != 0) {
-            // vehicle: pulling, pushing, or moving around the grabbed object.
-            if (u.grab_type == OBJECT_VEHICLE) {
-                grabbed_vehicle = m.veh_at(u.posx + u.grab_point.x, u.posy + u.grab_point.y);
-                if (NULL != grabbed_vehicle) {
-                    if (grabbed_vehicle == veh0) {
-                        add_msg(m_info, _("You can't move %s while standing on it!"), grabbed_vehicle->name.c_str());
-                        return false;
-                    }
+
+        // vehicle: pulling, pushing, or moving around the grabbed object.
+        switch (u.grab_type) {
+        case OBJECT_NONE:
+            break; // do nothing obviously
+        case OBJECT_VEHICLE:
+            grabbed_vehicle = m.veh_at(u.posx + u.grab_point.x, u.posy + u.grab_point.y);
+            if (NULL != grabbed_vehicle) {
+                int grabbed_part_index = grabbed_vehicle->global_part_at(u.posx + u.grab_point.x, u.posy + u.grab_point.y);
+                vehicle_part *grabbed_part = &grabbed_vehicle->parts[grabbed_part_index];
+                int gx = grabbed_vehicle->global_x();
+                int gy = grabbed_vehicle->global_y();
+                bool is_pushing = ((dx - u.grab_point.x == 0) && (dy - u.grab_point.y == 0));
+                bool is_pulling = abs(dx - u.grab_point.x) >= 2 || abs(dy - u.grab_point.y) >= 2;
+                if (!(is_pushing || is_pulling)) {
+                    // player remaining the same distance from the grab point
+                    u.grab_point.x -= dx;
+                    u.grab_point.y -= dy;
+                    // otherwise, player is pushing or pulling
+                } else if (grabbed_vehicle == veh0) {
+                    // player is attempting to move the vehicle he or she is standing on
+                    add_msg(m_info, _("You can't move %s while standing on it!"), grabbed_vehicle->name.c_str());
+                    return false;
+                } else {
                     drag_multiplier += (float)(grabbed_vehicle->total_mass() * 1000) /
                                        (float)(u.weight_capacity() * 5);
-                    if (drag_multiplier > 2.0) {
+                    float max_drag = 2.0;
+                    if (drag_multiplier > max_drag) {
                         add_msg(m_info, _("The %s is too heavy for you to budge!"), grabbed_vehicle->name.c_str());
                         return false;
                     }
-                    tileray mdir;
 
-                    int dxVeh = u.grab_point.x * (-1);
-                    int dyVeh = u.grab_point.y * (-1);
-                    int prev_grab_x = u.grab_point.x;
-                    int prev_grab_y = u.grab_point.y;
+                    // direction vehicle is moving by the push/pull
+                    int dxVeh;
+                    int dyVeh;
 
-                    if( abs(dx + dxVeh) == 2 || abs(dy + dyVeh) == 2 ||
-                        ((dxVeh + dx) == 0 && (dyVeh + dy) == 0) ) {
-                        //We are not moving around the veh
-                        if ((dxVeh + dx) == 0 && (dyVeh + dy) == 0) {
-                            //we are pushing in the direction of veh
-                            dxVeh = dx;
-                            dyVeh = dy;
+                    if (is_pulling) {
+                        // make vehicle move towards where player is going
+                        dxVeh = dx - u.grab_point.x;
+                        dyVeh = dy - u.grab_point.y;
+                        if (abs(dxVeh) == 2) {
+                            dxVeh /= 2;
+                        }
+                        if (abs(dyVeh) == 2) {
+                            dyVeh /= 2;
+                        }
+                    } else { // pushing
+                        // grabbed part moves in the same direction as the player
+                        dxVeh = dx;
+                        dyVeh = dy;
+                    }
+
+                    // calculate rotation for the vehicle
+                    int rotate_amt; // amount of rotating to do in degrees
+                    {
+                        float center_of_mass_x, center_of_mass_y;
+                        grabbed_vehicle->center_of_mass(center_of_mass_x, center_of_mass_y);
+                        float grabbed_posx, grabbed_posy;
+                        grabbed_vehicle->precise_mount_pos(grabbed_part_index, grabbed_posx, grabbed_posy);
+                        // bearing of the grabbed part from the CoM
+                        float grab_dir = atan2(grabbed_posy - center_of_mass_y,
+                                grabbed_posx - center_of_mass_x) * 180.0 / M_PI;
+                        grab_dir = (int) (5 * round(grab_dir/5 + 360)) % 360; // round to nearest 5 degrees and [0,360)
+                        // direction the vehicle will be moving
+                        float move_dir = atan2(dyVeh, dxVeh) * 180.0 / M_PI;
+                        if (move_dir < 0.0) {
+                            move_dir += 360.0;
+                        }
+                        // amount of counter-clockwise rotation it takes to go from grab_dir to move_dir
+                        int left = ((int) (grab_dir - move_dir + 360.0)) % 360;
+                        // actual amount of rotation needed
+                        if (left == 0 || left == 180) {
+                            // do not change direction, CoM is on the same axis as pulling
+                            rotate_amt = 0;
+                        } else if (left < 180) {
+                            // will turn counter-clockwise
+                            rotate_amt = -left;
                         } else {
-                            u.grab_point.x = dx * (-1);
-                            u.grab_point.y = dy * (-1);
+                            // will turn clockwise
+                            rotate_amt = 360 - left;
                         }
-
-                        if( (abs(dx + dxVeh) == 0 || abs(dy + dyVeh) == 0) &&
-                            u.grab_point.x != 0 && u.grab_point.y != 0 ) {
-                            //We are moving diagonal while veh is diagonal too and one direction is 0
-                            dxVeh = ((dx + dxVeh) == 0) ? 0 : dxVeh;
-                            dyVeh = ((dy + dyVeh) == 0) ? 0 : dyVeh;
-
-                            u.grab_point.x = dxVeh * (-1);
-                            u.grab_point.y = dyVeh * (-1);
+                        // make the vehicle gradually rotate to that amount
+                        if (rotate_amt < 0) {
+                            // not actually based on an equation or anything
+                            // but it looks good enough in action
+                            rotate_amt = -sqrt(-rotate_amt * 8) - 1;
+                        } else {
+                            rotate_amt = sqrt(rotate_amt * 8) + 1;
                         }
+                    }
 
-                        mdir.init(dxVeh, dyVeh);
-                        mdir.advance(1);
-                        grabbed_vehicle->turn(mdir.dir() - grabbed_vehicle->face.dir());
-                        grabbed_vehicle->face = grabbed_vehicle->turn_dir;
-                        grabbed_vehicle->precalc_mounts(1, mdir.dir());
+                    // now check collisions
+                    {
                         int imp = 0;
                         std::vector<veh_collision> veh_veh_colls;
                         std::vector<veh_collision> veh_misc_colls;
@@ -12556,211 +12608,72 @@ bool game::plmove(int dx, int dy)
                         u.posy = 0;
                         if (grabbed_vehicle->collision(veh_veh_colls, veh_misc_colls, dxVeh, dyVeh,
                                                        can_move, imp, true)) {
-                            // TODO: figure out what we collided with.
-                            add_msg(_("The %s collides with something."), grabbed_vehicle->name.c_str());
+                            if (!veh_veh_colls.empty()) {
+                                vehicle* collided = (vehicle*) veh_veh_colls.front().target;
+                                // TODO u.sees(x, y) to check if the player should know the name of the collided object
+                                add_msg(_("The %s collides with the %s."),
+                                        grabbed_vehicle->name.c_str(), collided->name.c_str());
+                            } else if (!veh_misc_colls.empty()) {
+                                // TODO: get name of obstacle, and check if the player can see it
+                                add_msg(_("The %s collides with an obstacle."), grabbed_vehicle->name.c_str());
+                                // TODO: also check if the thing hit is a monster, and don't
+                                // collide if it's something tiny like a wolf spider
+                            }
                             u.moves -= 10;
                             u.posx = player_prev_x;
                             u.posy = player_prev_y;
-                            u.grab_point.x = prev_grab_x;
-                            u.grab_point.y = prev_grab_y;
                             return false;
                         }
                         u.posx = player_prev_x;
                         u.posy = player_prev_y;
+                    }
 
-                        int gx = grabbed_vehicle->global_x();
-                        int gy = grabbed_vehicle->global_y();
-                        std::vector<int> wheel_indices =
-                            grabbed_vehicle->all_parts_with_feature( "WHEEL", false );
-                        for( auto it = wheel_indices.begin(); it != wheel_indices.end(); ++it) {
-                            int p = *it;
+                    // now actually rotate the vehicle
+                    rotate_amt += grabbed_vehicle->face.dir();
+                    rotate_amt = (int) (5 * round(rotate_amt/5 + 360)) % 360; // round to nearest 5 degrees and [0,360)
+                    grabbed_vehicle->turn(rotate_amt - grabbed_vehicle->face.dir());
+                    grabbed_vehicle->face = grabbed_vehicle->turn_dir;
+                    grabbed_vehicle->precalc_mounts(1, grabbed_vehicle->face.dir());
+                    // ideally the vehicle should rotate around the grabbed part
+                    // this should fix the vehicle rotating out of the player's hands
+                    dxVeh -= grabbed_part->precalc_dx[1] - grabbed_part->precalc_dx[0];
+                    dyVeh -= grabbed_part->precalc_dy[1] - grabbed_part->precalc_dy[0];
+
+                    // check for traps under wheels
+                    std::vector<int> wheel_indices =
+                        grabbed_vehicle->all_parts_with_feature( "WHEEL", false );
+                    if (!wheel_indices.empty()) {
+                        for (std::vector<int>::iterator it = wheel_indices.begin(); it != wheel_indices.end(); ++it) {
+                            vehicle_part* wheel = &grabbed_vehicle->parts[*it];
                             if( one_in(2) ) {
                                 grabbed_vehicle->handle_trap(
-                                    gx + grabbed_vehicle->parts[p].precalc_dx[0] + dxVeh,
-                                    gy + grabbed_vehicle->parts[p].precalc_dy[0] + dyVeh, p );
+                                    gx + wheel->precalc_dx[0] + dxVeh,
+                                    gy + wheel->precalc_dy[0] + dyVeh, *it );
                             }
                         }
-                        m.displace_vehicle(gx, gy, dxVeh, dyVeh);
                     } else {
-                        //We are moving around the veh
-                        u.grab_point.x = (dx + dxVeh) * (-1);
-                        u.grab_point.y = (dy + dyVeh) * (-1);
+                        // TODO no wheels, drag penalty for pulling/pushing vehicles the ground, and make all parts susceptible to traps
                     }
-                } else {
-                    add_msg(m_info, _("No vehicle at grabbed point."));
-                    u.grab_point.x = 0;
-                    u.grab_point.y = 0;
-                    u.grab_type = OBJECT_NONE;
-                }
-/*/
-        float drag_multiplier = 1.0;
-        vehicle *grabbed_vehicle = NULL;
-        vehicle_part *grabbed_part = NULL;
 
-        // TODO: would like to be able to have something grabbed at the player's square
-        if (u.grab_point.x != 0 || u.grab_point.y != 0) {
-            // vehicle: pulling, pushing, or moving around the grabbed object.
-            if (u.grab_type == OBJECT_VEHICLE) {
-                grabbed_vehicle = m.veh_at(u.posx + u.grab_point.x, u.posy + u.grab_point.y);
-                if (NULL != grabbed_vehicle) {
-                    int grabbed_part_index = grabbed_vehicle->global_part_at(u.posx + u.grab_point.x, u.posy + u.grab_point.y);
-                    grabbed_part = &grabbed_vehicle->parts[grabbed_part_index];
-                    int gx = grabbed_vehicle->global_x();
-                    int gy = grabbed_vehicle->global_y();
-                    bool is_pushing = ((dx - u.grab_point.x == 0) && (dy - u.grab_point.y == 0));
-                    bool is_pulling = abs(dx - u.grab_point.x) >= 2 || abs(dy - u.grab_point.y) >= 2;
-                    if (!(is_pushing || is_pulling)) {
-                        // player remaining the same distance from the grab point
-                        u.grab_point.x -= dx;
-                        u.grab_point.y -= dy;
-                        // otherwise, player is pushing or pulling
-                    } else if (grabbed_vehicle == veh0) {
-                        // player is attempting to move the vehicle he or she is standing on
-                        add_msg(m_info, _("You can't move %s while standing on it!"), grabbed_vehicle->name.c_str());
-                        return false;
-                    } else {
-                        drag_multiplier += (float)(grabbed_vehicle->total_mass() * 1000) /
-                                           (float)(u.weight_capacity() * 5);
-                        float max_drag = 2.0;
-                        if (drag_multiplier > max_drag) {
-                            add_msg(m_info, _("The %s is too heavy for you to budge!"), grabbed_vehicle->name.c_str());
-                            return false;
-                        }
+                    m.displace_vehicle(gx, gy, dxVeh, dyVeh);
 
-                        // direction vehicle is moving by the push/pull
-                        int dxVeh;
-                        int dyVeh;
-
-                        if (is_pulling) {
-                            // make vehicle move towards where player is going
-                            dxVeh = dx - u.grab_point.x;
-                            dyVeh = dy - u.grab_point.y;
-                            if (abs(dxVeh) == 2) {
-                                dxVeh /= 2;
-                            }
-                            if (abs(dyVeh) == 2) {
-                                dyVeh /= 2;
-                            }
-                        } else { // pushing
-                            // grabbed part moves in the same direction as the player
-                            dxVeh = dx;
-                            dyVeh = dy;
-                        }
-
-                        // calculate rotation for the vehicle
-                        int rotate_amt; // amount of rotating to do in degrees
-                        {
-                            float center_of_mass_x, center_of_mass_y;
-                            grabbed_vehicle->center_of_mass(center_of_mass_x, center_of_mass_y);
-                            float grabbed_posx, grabbed_posy;
-                            grabbed_vehicle->precise_mount_pos(grabbed_part_index, grabbed_posx, grabbed_posy);
-                            // bearing of the grabbed part from the CoM
-                            float grab_dir = atan2(grabbed_posy - center_of_mass_y,
-                                    grabbed_posx - center_of_mass_x) * 180.0 / M_PI;
-                            grab_dir = (int) (5 * round(grab_dir/5 + 360)) % 360; // round to nearest 5 degrees and [0,360)
-                            // direction the vehicle will be moving
-                            float move_dir = atan2(dyVeh, dxVeh) * 180.0 / M_PI;
-                            if (move_dir < 0.0) {
-                                move_dir += 360.0;
-                            }
-                            // amount of counter-clockwise rotation it takes to go from grab_dir to move_dir
-                            int left = ((int) (grab_dir - move_dir + 360.0)) % 360;
-                            // actual amount of rotation needed
-                            if (left == 0 || left == 180) {
-                                // do not change direction, CoM is on the same axis as pulling
-                                rotate_amt = 0;
-                            } else if (left < 180) {
-                                // will turn counter-clockwise
-                                rotate_amt = -left;
-                            } else {
-                                // will turn clockwise
-                                rotate_amt = 360 - left;
-                            }
-                            // make the vehicle gradually rotate to that amount
-                            if (rotate_amt < 0) {
-                                // not actually based on any equation
-                                // but it looks good enough in action
-                                rotate_amt = -sqrt(-rotate_amt * 2) - 2;
-                            } else {
-                                rotate_amt = sqrt(rotate_amt * 2) + 2;
-                            }
-                        }
-
-                        // now check collisions
-                        {
-                            int imp = 0;
-                            std::vector<veh_collision> veh_veh_colls;
-                            std::vector<veh_collision> veh_misc_colls;
-                            bool can_move = true;
-                            // Set player location to illegal value so it can't collide with vehicle.
-                            int player_prev_x = u.posx;
-                            int player_prev_y = u.posy;
-                            u.posx = 0;
-                            u.posy = 0;
-                            if (grabbed_vehicle->collision(veh_veh_colls, veh_misc_colls, dxVeh, dyVeh,
-                                                           can_move, imp, true)) {
-                                if (!veh_veh_colls.empty()) {
-                                    vehicle* collided = (vehicle*) veh_veh_colls.front().target;
-                                    // TODO u.sees(x, y) to check if the player should know the name of the collided object
-                                    add_msg(_("The %s collides with the %s."),
-                                            grabbed_vehicle->name.c_str(), collided->name.c_str());
-                                } else if (!veh_misc_colls.empty()) {
-                                    // TODO: get name of obstacle, and check if the player can see it
-                                    add_msg(_("The %s collides with an obstacle."), grabbed_vehicle->name.c_str());
-                                }
-                                u.moves -= 10;
-                                u.posx = player_prev_x;
-                                u.posy = player_prev_y;
-                                return false;
-                            }
-                            u.posx = player_prev_x;
-                            u.posy = player_prev_y;
-                        }
-
-                        // now actually rotate the vehicle
-                        rotate_amt += grabbed_vehicle->face.dir();
-                        rotate_amt = (int) (5 * round(rotate_amt/5 + 360)) % 360; // round to nearest 5 degrees and [0,360)
-                        grabbed_vehicle->turn(rotate_amt - grabbed_vehicle->face.dir());
-                        grabbed_vehicle->face = grabbed_vehicle->turn_dir;
-                        grabbed_vehicle->precalc_mounts(1, grabbed_vehicle->face.dir());
-                        // ideally the vehicle should rotate around the grabbed part
-                        // this should fix the vehicle rotating out of the player's hands
-                        dxVeh -= grabbed_part->precalc_dx[1] - grabbed_part->precalc_dx[0];
-                        dyVeh -= grabbed_part->precalc_dy[1] - grabbed_part->precalc_dy[0];
-
-                        // check for traps under wheels
-                        std::vector<int> wheel_indices =
-                            grabbed_vehicle->all_parts_with_feature( "WHEEL", false );
-                        if (!wheel_indices.empty()) {
-                            for (std::vector<int>::iterator it = wheel_indices.begin(); it != wheel_indices.end(); ++it) {
-                                vehicle_part* wheel = &grabbed_vehicle->parts[*it];
-                                if( one_in(2) ) {
-                                    grabbed_vehicle->handle_trap(
-                                        gx + wheel->precalc_dx[0] + dxVeh,
-                                        gy + wheel->precalc_dy[0] + dyVeh, *it );
-                                }
-                            }
-                        } else {
-                            // TODO no wheels, drag penalty for pulling/pushing vehicles the ground, and make all parts susceptible to traps
-                        }
-
-                        m.displace_vehicle(gx, gy, dxVeh, dyVeh);
-
-                        // shift grab point to where the grabbed part is
-                        u.grab_point.x = (grabbed_vehicle->global_x() + grabbed_part->precalc_dx[0]) - (u.posx + dx);
-                        u.grab_point.y = (grabbed_vehicle->global_y() + grabbed_part->precalc_dy[0]) - (u.posy + dy);
-                    } // end if !(is_pushing || is_pulling)
-                } else {
-                    add_msg(m_info, _("No vehicle at grabbed point."));
-                    u.grab_point.x = 0;
-                    u.grab_point.y = 0;
-                    u.grab_type = OBJECT_NONE;
-                }
-                // Furniture: pull, push, or standing still and nudging object around.
-                // Can push furniture out of reach.
-            } else if ( u.grab_type == OBJECT_FURNITURE ) {
-                point fpos( u.posx + u.grab_point.x, u.posy + u.grab_point.y );
+                    // shift grab point to where the grabbed part is
+                    u.grab_point.x = (grabbed_vehicle->global_x() + grabbed_part->precalc_dx[0]) - (u.posx + dx);
+                    u.grab_point.y = (grabbed_vehicle->global_y() + grabbed_part->precalc_dy[0]) - (u.posy + dy);
+                } // end if !(is_pushing || is_pulling)
+            } else {
+                debugmsg(_("No vehicle at grabbed point."));
+                u.grab_point.x = 0;
+                u.grab_point.y = 0;
+                u.grab_type = OBJECT_NONE;
+            }
+            break;
+        case OBJECT_FURNITURE:
+            // Furniture: pull, push, or standing still and nudging object around.
+            // Can push furniture out of reach.
+            if (!(u.grab_point.x == 0 && u.grab_point.y == 0)) {
                 // supposed position of grabbed furniture
+                point fpos( u.posx + u.grab_point.x, u.posy + u.grab_point.y );
                 if ( ! m.has_furn( fpos.x, fpos.y ) ) {
                     // where'd it go? We're grabbing thin air so reset.
                     add_msg(m_info, _("No furniture at grabbed point.") );
@@ -12771,13 +12684,13 @@ bool game::plmove(int dx, int dy)
                     // Unfortunately, game::is_empty fails for tiles we're standing on,
                     // which will forbid pulling, so:
                     bool canmove = (
-                                       ( m.move_cost(fdest.x, fdest.y) > 0) &&
-                                       npc_at(fdest.x, fdest.y) == -1 &&
-                                       mon_at(fdest.x, fdest.y) == -1 &&
-                                       m.has_flag("FLAT", fdest.x, fdest.y) &&
-                                       !m.has_furn(fdest.x, fdest.y) &&
-                                       m.veh_at(fdest.x, fdest.y) == NULL &&
-                                       m.tr_at(fdest.x, fdest.y) == tr_null
+                                       (m.move_cost(fdest.x, fdest.y) > 0) &&  // square is not blocked
+                                       npc_at(fdest.x, fdest.y) == -1 &&       // and has no NPCs
+                                       mon_at(fdest.x, fdest.y) == -1 &&       // and no monsters
+                                       m.has_flag("FLAT", fdest.x, fdest.y) && // and is not an obstacle
+                                       !m.has_furn(fdest.x, fdest.y) &&        // and does not contain furniture
+                                       m.veh_at(fdest.x, fdest.y) == NULL &&   // or a vehicle
+                                       m.tr_at(fdest.x, fdest.y) == tr_null    // or a trap
                                    );
 
                     const furn_t furntype = m.furn_at(fpos.x, fpos.y);
@@ -12842,6 +12755,8 @@ bool game::plmove(int dx, int dy)
                     m.furn_set(fpos.x, fpos.y, f_null);
 
                     if ( src_items > 0 ) {  // and the stuff inside.
+                        // note: if an empty container is being dragged to a square with items,
+                        // all items on the square it moves to will magically enter the container
                         if ( dst_item_ok && src_item_ok ) {
                             // Assume contents of both cells are legal, so we can just swap contents.
                             m.i_at( fpos.x, fpos.y).swap( m.i_at(fdest.x, fdest.y) );
@@ -12855,26 +12770,27 @@ bool game::plmove(int dx, int dy)
                             u.grab_point = point ( u.grab_point.x + dx ,
                                                    u.grab_point.y + dy ); // furniture moved relative to us
                         } else { // we pushed furniture out of reach
-                            add_msg( _("You let go of the %s"), furntype.name.c_str() );
+                            add_msg( _("You let go of the %s."), furntype.name.c_str() );
                             u.grab_point = point (0, 0);
                             u.grab_type = OBJECT_NONE;
                         }
                         return false; // We moved furniture but stayed still.
                     } else if ( pushing_furniture &&
-                                m.move_cost(x, y) <= 0 ) { // Not sure how that chair got into a wall, but don't let player follow.
-                        add_msg( _("You let go of the %s as it slides past %s"), furntype.name.c_str(), m.ter_at(x,
-                                 y).name.c_str() );
+                                m.move_cost(x, y) <= 0 ) {
+                        // Not sure how that chair got into a wall, but don't let player follow.
+                        add_msg( _("You let go of the %s as it slides past the %s."), furntype.name.c_str(),
+                                m.ter_at(x, y).name.c_str() );
                         u.grab_point = point (0, 0);
                         u.grab_type = OBJECT_NONE;
                     }
                 }
-                // Unsupported!
             } else {
-                add_msg(m_info, _("Nothing at grabbed point %d,%d."), u.grab_point.x, u.grab_point.y );
-                u.grab_point.x = 0;
-                u.grab_point.y = 0;
+                u.grab_point = point (0, 0);
                 u.grab_type = OBJECT_NONE;
             }
+            break;
+        default:
+            debugmsg("Unhandled grab type %d", u.grab_type);
         }
 
         // Calculate cost of moving
@@ -13524,11 +13440,12 @@ void game::vertical_move(int movez, bool force)
     }
 
     if (force) {
-        // Let go of a grabbed cart.
+        // Let go of a grabbed object.
         u.grab_point.x = 0;
         u.grab_point.y = 0;
-    } else if (u.grab_point.x != 0 || u.grab_point.y != 0) {
-        // TODO: Warp the cart along with you if you're on an elevator
+        u.grab_type = OBJECT_NONE;
+    } else if (u.grab_type != OBJECT_NONE) {
+        // TODO: Warp the object along with you if you're on an elevator
         add_msg(m_info, _("You can't drag things up and down stairs."));
         return;
     }

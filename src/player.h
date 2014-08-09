@@ -826,7 +826,7 @@ public:
  bool controlling_vehicle;  // Is currently in control of a vehicle
  // Relative direction of a grab, add to posx, posy to get the coordinates of the grabbed thing.
  point grab_point;
- object_type grab_type;
+ object_type grab_type; // use this to determine if there is a grab; OBJECT_NONE means there is no grab
  player_activity activity;
  player_activity backlog;
 // _missions vectors are of mission IDs

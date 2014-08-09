@@ -426,14 +426,10 @@ void player::deserialize(JsonIn &jsin)
     data.read("controlling_vehicle",controlling_vehicle);
 
     data.read("grab_point", grab_point);
-    std::string grab_typestr="OBJECT_NONE";
-    if( grab_point.x != 0 || grab_point.y != 0 ) {
-        grab_typestr = "OBJECT_VEHICLE";
-        data.read( "grab_type", grab_typestr);
-    }
-
+    std::string grab_typestr = "OBJECT_NONE";
+    data.read("grab_type", grab_typestr);
     if ( obj_type_id.find(grab_typestr) != obj_type_id.end() ) {
-        grab_type = (object_type)obj_type_id[grab_typestr];
+        grab_type = (object_type) obj_type_id[grab_typestr];
     }
 
     data.read( "stomach_food", stomach_food);
