@@ -12390,6 +12390,8 @@ bool game::plmove(int dx, int dy)
     int vpart0 = -1, vpart1 = -1, dpart = -1;
     vehicle *veh0 = m.veh_at(u.posx, u.posy, vpart0);
     vehicle *veh1 = m.veh_at(x, y, vpart1);
+    bool pushing_vehicle = ((dx - u.grab_point.x == 0) && (dy - u.grab_point.y == 0));
+    bool pulling_vehicle = abs(dx - u.grab_point.x) >= 2 || abs(dy - u.grab_point.y) >= 2;
     bool pushing_furniture = false;  // moving -into- furniture tile; skip check for move_cost > 0
     bool pulling_furniture = false;  // moving -away- from furniture tile; check for move_cost > 0
     bool shifting_furniture = false; // moving furniture and staying still; skip check for move_cost > 0
@@ -12458,7 +12460,8 @@ bool game::plmove(int dx, int dy)
             }
             plswim(x, y);
         }
-    } else if (m.move_cost(x, y) > 0 || pushing_furniture || shifting_furniture) {
+    } else if ( m.move_cost(x, y) > 0 || pushing_vehicle
+            || pushing_furniture || shifting_furniture ) {
         // move_cost() of 0 = impassible (e.g. a wall)
         u.set_underwater(false);
 
@@ -12516,9 +12519,7 @@ bool game::plmove(int dx, int dy)
                 vehicle_part *grabbed_part = &grabbed_vehicle->parts[grabbed_part_index];
                 int gx = grabbed_vehicle->global_x();
                 int gy = grabbed_vehicle->global_y();
-                bool is_pushing = ((dx - u.grab_point.x == 0) && (dy - u.grab_point.y == 0));
-                bool is_pulling = abs(dx - u.grab_point.x) >= 2 || abs(dy - u.grab_point.y) >= 2;
-                if (!(is_pushing || is_pulling)) {
+                if (!(pushing_vehicle || pulling_vehicle)) {
                     // player remaining the same distance from the grab point
                     u.grab_point.x -= dx;
                     u.grab_point.y -= dy;
@@ -12540,7 +12541,7 @@ bool game::plmove(int dx, int dy)
                     int dxVeh;
                     int dyVeh;
 
-                    if (is_pulling) {
+                    if (pulling_vehicle) {
                         // make vehicle move towards where player is going
                         dxVeh = dx - u.grab_point.x;
                         dyVeh = dy - u.grab_point.y;
@@ -12660,7 +12661,7 @@ bool game::plmove(int dx, int dy)
                     // shift grab point to where the grabbed part is
                     u.grab_point.x = (grabbed_vehicle->global_x() + grabbed_part->precalc_dx[0]) - (u.posx + dx);
                     u.grab_point.y = (grabbed_vehicle->global_y() + grabbed_part->precalc_dy[0]) - (u.posy + dy);
-                } // end if !(is_pushing || is_pulling)
+                } // end if !(pushing_vehicle || pulling_vehicle)
             } else {
                 debugmsg(_("No vehicle at grabbed point."));
                 u.grab_point.x = 0;
