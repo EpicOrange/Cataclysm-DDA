@@ -3043,7 +3043,7 @@ int vehicle::moment_of_inertia() const
 {
     // Get center of mass, first
     int x_com, y_com;
-    center_of_mass(x_com, y_com, false);
+    center_of_mass( x_com, y_com, false );
 
     float I_total = 0.0f;
     for( size_t i = 0; i < parts.size(); i++ )
