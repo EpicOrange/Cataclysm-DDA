@@ -3039,6 +3039,34 @@ void vehicle::center_of_mass(int &x, int &y, bool use_precalc) const
     y = pt.y;
 }
 
+int vehicle::moment_of_inertia() const
+{
+    // Get center of mass, first
+    int x_com, y_com;
+    center_of_mass(x_com, y_com, false);
+
+    float I_total = 0.0f;
+    for( size_t i = 0; i < parts.size(); i++ )
+    {
+        if( parts[i].removed ) {
+            continue;
+        }
+
+        float m_part = calc_mass_of_part( i ) / 1000.0f; // in kg
+
+        // For squares with side length s, I about the center = ms^2/6. Use s = 1.
+        // TODO things like external tanks are circles I=ms^2/8
+        float I_part = m_part / 6.0f;
+
+        // Parallel axis theorem I = I + Mh^2 to get I about COM
+        int dx = x_com - parts[i].mount.x;
+        int dy = y_com - parts[i].mount.y;
+        int distancesq = ( dx * dx ) + ( dy * dy );
+        I_total += I_part + ( m_part * distancesq );
+    }
+    return round( I_total );
+}
+
 point vehicle::pivot_displacement() const
 {
     // precalc_mounts always produces a result that puts the pivot point at (0,0).
@@ -6928,6 +6956,35 @@ void vehicle::refresh_mass() const
     calc_mass_center( true );
 }
 
+int vehicle::calc_mass_of_part( int i ) const
+{
+    if( parts[i].removed ) {
+        return 0;
+    }
+
+    int m_part = 0;
+    const auto &pi = part_info( i );
+    m_part += item::find_type( pi.item )->weight;
+    for( const auto &j : get_items( i ) ) {
+        //m_part += j.type->weight;
+        // Change back to the above if it runs too slowly
+        m_part += j.weight();
+    }
+
+    if( pi.has_flag( VPFLAG_BOARDABLE ) && parts[i].has_flag( vehicle_part::passenger_flag ) ) {
+        const player *p = get_passenger( i );
+        // Sometimes flag is wrongly set, don't crash!
+        m_part += p != nullptr ? p->get_weight() : 0;
+    }
+
+    if( pi.has_flag( VPFLAG_FUEL_TANK ) && parts[i].amount > 0 &&
+        pi.fuel_type != fuel_type_battery && pi.fuel_type != fuel_type_plasma ) {
+        m_part += item::find_type( pi.fuel_type )->weight * parts[i].amount;
+    }
+
+    return m_part;
+}
+
 void vehicle::calc_mass_center( bool use_precalc ) const
 {
     float xf = 0.0f;
@@ -6938,43 +6995,21 @@ void vehicle::calc_mass_center( bool use_precalc ) const
         if( parts[i].removed ) {
             continue;
         }
-
-        int m_part = 0;
-        const auto &pi = part_info( i );
-        m_part += item::find_type( pi.item )->weight;
-        for( const auto &j : get_items( i ) ) {
-            //m_part += j.type->weight;
-            // Change back to the above if it runs too slowly
-            m_part += j.weight();
-        }
-
-        if( pi.has_flag( VPFLAG_BOARDABLE ) && parts[i].has_flag( vehicle_part::passenger_flag ) ) {
-            const player *p = get_passenger( i );
-            // Sometimes flag is wrongly set, don't crash!
-            m_part += p != nullptr ? p->get_weight() : 0;
-        }
-
-        if( pi.has_flag( VPFLAG_FUEL_TANK ) && parts[i].amount > 0 &&
-            pi.fuel_type != fuel_type_battery && pi.fuel_type != fuel_type_plasma ) {
-            m_part += item::find_type( pi.fuel_type )->weight * parts[i].amount;
-        }
-
-        if( use_precalc ) {
-            xf += parts[i].precalc[0].x * m_part / 1000.0f;
-            yf += parts[i].precalc[0].y * m_part / 1000.0f;
-        } else {
-            xf += parts[i].mount.x * m_part / 1000.0f;
-            yf += parts[i].mount.y * m_part / 1000.0f;
-        }
-
+        int m_part = calc_mass_of_part( i );
+        int x_part = use_precalc ? parts[i].precalc[0].x : parts[i].mount.x;
+        int y_part = use_precalc ? parts[i].precalc[0].y : parts[i].mount.y;
+        xf += x_part * m_part;
+        yf += y_part * m_part;
         m_total += m_part;
     }
+    xf /= m_total;
+    yf /= m_total;
 
+    // cache total mass
     mass_cache = m_total / 1000;
     mass_dirty = false;
 
-    xf /= m_total;
-    yf /= m_total;
+    // cache center of mass
     if( use_precalc ) {
         mass_center_precalc.x = round( xf );
         mass_center_precalc.y = round( yf );

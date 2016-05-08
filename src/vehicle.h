@@ -605,6 +605,11 @@ public:
     // unrotated part coordinates otherwise
     void center_of_mass(int &x, int &y, bool use_precalc = true) const;
 
+    // moment of inertia about COM.
+    // uses unrotated part coordinates
+    // used in calculating dragged vehicle rotation
+    int moment_of_inertia() const;
+
     // Get the pivot point of vehicle; coordinates are unrotated mount coordinates.
     // This may result in refreshing the pivot point if it is currently stale.
     const point &pivot_point() const;
@@ -997,6 +1002,7 @@ private:
     mutable point pivot_cache;                 // cached pivot point
 
     void refresh_mass() const;
+    int calc_mass_of_part( int i ) const;        // in grams. take account of stored items, liquids in tank, passenger
     void calc_mass_center( bool precalc ) const;
 
     mutable bool mass_dirty                     = true;

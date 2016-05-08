@@ -1494,14 +1494,16 @@ void veh_interact::display_veh ()
     const int hh = getmaxy(w_disp) / 2;
 
     if (debug_mode) {
-        // show CoM, pivot in debug mode
+        // show CoM, pivot, moment of inertia in debug mode
 
         const point &pivot = veh->pivot_point();
         int com_x, com_y;
         veh->center_of_mass(com_x, com_y, false);
+        int moi = veh->moment_of_inertia();
 
         mvwprintz(w_disp, 0, 0, c_green, "CoM   %d,%d", com_x, com_y);
         mvwprintz(w_disp, 1, 0, c_red,   "Pivot %d,%d", pivot.x, pivot.y);
+        mvwprintz(w_disp, 2, 0, c_cyan,  "MoI   %d",    moi);
 
         int com_sx, com_sy, pivot_sx, pivot_sy;
         if (vertical_menu) {
