@@ -605,9 +605,8 @@ public:
     // unrotated part coordinates otherwise
     void center_of_mass(int &x, int &y, bool use_precalc = true) const;
 
-    // moment of inertia about COM.
-    // uses unrotated part coordinates
-    // used in calculating dragged vehicle rotation
+    // Get moment of inertia of the vehicle about COM, units kg * (tile side length)^2.
+    // Used in calculating rotation when dragging a vehicle
     int moment_of_inertia() const;
 
     // Get the pivot point of vehicle; coordinates are unrotated mount coordinates.
@@ -1004,14 +1003,17 @@ private:
     void refresh_mass() const;
     int calc_mass_of_part( int i ) const;        // in grams. take account of stored items, liquids in tank, passenger
     void calc_mass_center( bool precalc ) const;
+    void calc_moment_of_inertia() const;
 
     mutable bool mass_dirty                     = true;
     mutable bool mass_center_precalc_dirty      = true;
     mutable bool mass_center_no_precalc_dirty   = true;
+    mutable bool moment_of_inertia_dirty        = true;
 
     mutable int mass_cache;
     mutable point mass_center_precalc;
     mutable point mass_center_no_precalc;
+    mutable int moment_of_inertia_cache;
 };
 
 #endif

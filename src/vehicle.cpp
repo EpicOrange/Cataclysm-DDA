@@ -3041,30 +3041,10 @@ void vehicle::center_of_mass(int &x, int &y, bool use_precalc) const
 
 int vehicle::moment_of_inertia() const
 {
-    // Get center of mass, first
-    int x_com, y_com;
-    center_of_mass( x_com, y_com, false );
-
-    float I_total = 0.0f;
-    for( size_t i = 0; i < parts.size(); i++ )
-    {
-        if( parts[i].removed ) {
-            continue;
-        }
-
-        float m_part = calc_mass_of_part( i ) / 1000.0f; // in kg
-
-        // For squares with side length s, I about the center = ms^2/6. Use s = 1.
-        // TODO things like external tanks are circles I=ms^2/8
-        float I_part = m_part / 6.0f;
-
-        // Parallel axis theorem I = I + Mh^2 to get I about COM
-        int dx = x_com - parts[i].mount.x;
-        int dy = y_com - parts[i].mount.y;
-        int distancesq = ( dx * dx ) + ( dy * dy );
-        I_total += I_part + ( m_part * distancesq );
+    if( moment_of_inertia_dirty ) {
+        calc_moment_of_inertia();
     }
-    return round( I_total );
+    return moment_of_inertia_cache;
 }
 
 point vehicle::pivot_displacement() const
@@ -6947,6 +6927,7 @@ void vehicle::invalidate_mass()
     mass_dirty = true;
     mass_center_precalc_dirty = true;
     mass_center_no_precalc_dirty = true;
+    moment_of_inertia_dirty = true;
     // Anything that affects mass will also affect the pivot
     pivot_dirty = true;
 }
@@ -7019,4 +7000,35 @@ void vehicle::calc_mass_center( bool use_precalc ) const
         mass_center_no_precalc.y = round( yf );
         mass_center_no_precalc_dirty = false;
     }
+}
+
+void vehicle::calc_moment_of_inertia() const {
+
+    // Get center of mass, first
+    int x_com, y_com;
+    center_of_mass( x_com, y_com, false );
+
+    float I_total = 0.0f;
+    for( size_t i = 0; i < parts.size(); i++ )
+    {
+        if( parts[i].removed ) {
+            continue;
+        }
+
+        float m_part = calc_mass_of_part( i ) / 1000.0f; // in kg
+
+        // For squares with side length s, I about the center = ms^2/6. Use s = 1.
+        // TODO things like external tanks are circles I=ms^2/8
+        float I_part = m_part / 6.0f;
+
+        // Parallel axis theorem I = I + Mh^2 to get I about COM
+        int dx = x_com - parts[i].mount.x;
+        int dy = y_com - parts[i].mount.y;
+        int distancesq = ( dx * dx ) + ( dy * dy );
+        I_total += I_part + ( m_part * distancesq );
+    }
+
+    // cache moment of inertia
+    moment_of_inertia_cache = round( I_total );
+    moment_of_inertia_dirty = false;
 }
