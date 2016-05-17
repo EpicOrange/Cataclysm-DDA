@@ -12613,9 +12613,10 @@ bool game::phasing_move( const tripoint &dest_loc )
 bool game::grabbed_veh_move( const tripoint &dp )
 {
     int grabbed_part = 0;
-    vehicle *grabbed_vehicle = m.veh_at( u.pos() + u.grab_point, grabbed_part );
+    tripoint grab_position = u.pos() + u.grab_point; // relative to map
+    vehicle *grabbed_vehicle = m.veh_at( grab_position, grabbed_part );
     if( nullptr == grabbed_vehicle ) {
-        add_msg(m_info, _("No vehicle at grabbed point."));
+        add_msg( m_info, _("No vehicle at grabbed point.") );
         u.grab_point = tripoint_zero;
         u.grab_type = OBJECT_NONE;
         return false;
@@ -12623,134 +12624,80 @@ bool game::grabbed_veh_move( const tripoint &dp )
 
     const vehicle *veh_under_player = m.veh_at( u.pos() );
     if( grabbed_vehicle == veh_under_player ) {
-        add_msg(m_info, _("You can't move %s while standing on it!"), grabbed_vehicle->name.c_str());
+        add_msg( m_info, _("You can't move %s while standing on it!"), grabbed_vehicle->name.c_str() );
         return true;
     }
 
-    //vehicle movement: strength check
-    int mc = 0;
-    int str_req = (grabbed_vehicle->total_mass() / 25); //strengh reqired to move vehicle.
-
-    //if vehicle is rollable we modify str_req based on a function of movecost per wheel.
-
-    // Veh just too big to grab & move; 41-45 lets folks have a bit of a window
-    // (Roughly 1.1K kg = danger zone; cube vans are about the max)
-    if (str_req > 45) {
-        add_msg(m_info, _("The %s is too bulky for you to move by hand."),
-                grabbed_vehicle->name.c_str() );
-        u.moves -= 100;
-        return true; // No shoving around an RV.
-    }
-
-    const auto &wheel_indices = grabbed_vehicle->wheelcache;
-    //if vehicle weighs too much, wheels don't provide a bonus.
-    //wheel_indices can be empty if a boat contains "floats" type parts only
-    if (grabbed_vehicle->valid_wheel_config() && str_req <= 40 && !wheel_indices.empty() ) {
-        //determine movecost for terrain touching wheels
-        const tripoint vehpos = grabbed_vehicle->global_pos3();
-        for( int p : wheel_indices ) {
-            const tripoint wheel_pos = vehpos + grabbed_vehicle->parts[p].precalc[0];
-            const int mapcost = m.move_cost( wheel_pos, grabbed_vehicle );
-            mc += (str_req / wheel_indices.size()) * mapcost;
-        }
-        //set strength check threshold
-        //if vehicle has many or only one wheel (shopping cart), it is as if it had four.
-        if(wheel_indices.size() > 4 || wheel_indices.size() == 1) {
-            str_req = mc / 4 + 1;
-        } else {
-            str_req = mc / wheel_indices.size() + 1;
-        }
-    } else {
-        str_req++;
-        //if vehicle has no wheels str_req make a noise.
-        if (str_req <= u.get_str() ) {
-            sounds::sound( grabbed_vehicle->global_pos3(), str_req * 2,
-                _("a scraping noise."));
-        }
-    }
-
-    //final strength check and outcomes
-    ///\EFFECT_STR determines ability to drag vehicles
-    if (str_req <= u.get_str() ) {
-        //calculate exertion factor and movement penalty
-        ///\EFFECT_STR increases speed of dragging vehicles
-        u.moves -= 100 * str_req / std::max( 1, u.get_str() );
-        int ex = dice(1, 3) - 1 + str_req;
-        if (ex > u.get_str() ) {
-            add_msg(m_bad, _("You strain yourself to move the %s!"), grabbed_vehicle->name.c_str() );
-            u.moves -= 200;
-            u.mod_pain(1);
-        } else if (ex == u.get_str() ) {
-            u.moves -= 200;
-            add_msg( _("It takes some time to move the %s."), grabbed_vehicle->name.c_str());
-        }
-    } else {
-        u.moves -= 100;
-        add_msg( m_bad, _("You lack the strength to move the %s"), grabbed_vehicle->name.c_str() );
-        return true;
-    }
-
-    tileray mdir;
-
-    tripoint dp_veh = -u.grab_point;
-    tripoint prev_grab = u.grab_point;
-
-    if( abs(dp.x + dp_veh.x) == 2 || abs(dp.y + dp_veh.y) == 2 ||
-        ((dp_veh.x + dp.x) == 0 && (dp_veh.y + dp.y) == 0) ) {
-        // We are not moving around the veh
-        if ((dp_veh.x + dp.x) == 0 && (dp_veh.y + dp.y) == 0) {
-            // We are pushing in the direction of veh
-            dp_veh = dp;
-        } else {
-            u.grab_point = -dp;
-        }
-
-        if( (abs(dp.x + dp_veh.x) == 0 || abs(dp.y + dp_veh.y) == 0) &&
-            u.grab_point.x != 0 && u.grab_point.y != 0 ) {
-            // We are moving diagonal while veh is diagonal too and one direction is 0
-            dp_veh.x = ((dp.x + dp_veh.x) == 0) ? 0 : dp_veh.x;
-            dp_veh.y = ((dp.y + dp_veh.y) == 0) ? 0 : dp_veh.y;
-
-            u.grab_point = -dp_veh;
-        }
-
-        mdir.init(dp_veh.x, dp_veh.y);
-        grabbed_vehicle->turn(mdir.dir() - grabbed_vehicle->face.dir());
-        grabbed_vehicle->face = grabbed_vehicle->turn_dir;
-        grabbed_vehicle->precalc_mounts(1, mdir.dir(), grabbed_vehicle->pivot_point());
-
-        // cancel out any movement of the vehicle due only to a change in pivot
-        dp_veh -= grabbed_vehicle->pivot_displacement();
-
-        std::vector<veh_collision> colls;
-        // Set player location to illegal value so it can't collide with vehicle.
-        const tripoint player_prev = u.pos();
-        u.setpos( tripoint_zero );
-        if( grabbed_vehicle->collision( colls, dp_veh, true ) ) {
-            add_msg( _("The %s collides with %s."),
-                grabbed_vehicle->name.c_str(), colls[0].target_name.c_str() );
-            u.moves -= 10;
-            u.setpos( player_prev );
-            u.grab_point = prev_grab;
-            return true;
-        }
-
-        u.setpos( player_prev );
-
-        tripoint gp = grabbed_vehicle->global_pos3();
-        const auto &wheel_indices =
-            grabbed_vehicle->wheelcache;
-        for( int p : wheel_indices ) {
-            if( one_in(2) ) {
-                tripoint wheel_p = gp + grabbed_vehicle->parts[p].precalc[0] + dp_veh;
-                grabbed_vehicle->handle_trap( wheel_p, p );
-            }
-        }
-
-        m.displace_vehicle( gp, dp_veh );
-    } else {
+    // Check if player is pivoting around the grab point, i.e. not moving the vehicle.
+    tripoint delta = dp - u.grab_point; // vector from grabbed point to player's new position
+    bool is_pushing = ( delta.x == 0 && delta.y == 0 );
+    bool is_pulling = ( abs(delta.x) == 2 || abs(delta.y) == 2 );
+    if( !is_pushing && !is_pulling ) {
         // We are moving around the veh
-        u.grab_point = -(dp + dp_veh);
+        u.grab_point = -delta;
+        return false;
+    }
+    // TODO pushing.
+    if( is_pulling ) {
+
+        // Handle pulling!
+        // grabbed part relative to player = u.grab_point
+        // Figure out grabbed part's destination relative to player.
+        tileray movement_of_part_ray( dp.x - u.grab_point.x, dp.y - u.grab_point.y );
+        movement_of_part_ray.advance();
+        tripoint d_part( movement_of_part_ray.dx(), movement_of_part_ray.dy(), 0 );
+        tripoint destination = u.grab_point + d_part;
+        // COM relative to player = u.grab_point + COM relative to vehicle - grabbed part relative to vehicle
+        tripoint com;
+        grabbed_vehicle->center_of_mass( com.x, com.y, true ); // com is now relative to vehicle
+        com = u.grab_point + ( com - grabbed_vehicle->parts[grabbed_part].precalc[0] ); // make relative to player
+
+        // theta is the angle between vectors a and b,
+        // where a = angle from COM to part's destination
+        // and b = angle from COM to grabbed part
+        tripoint a = destination - com; // vector from COM to destination, relative to player
+        tripoint b = u.grab_point - com; // vector from COM to grab, relative to player
+        double theta = 0.0;
+        if( !( a.x == 0 && a.y == 0 ) && !( b.x == 0 && b.y == 0 ) ) {
+            // Not dragging COM, or dragging to COM, so atan2 works
+            // Otherwise theta is 0 since there's no rotation anyways when you drag from/towards COM
+            theta = atan2( a.y, a.x ) - atan2( b.y, b.x );
+        }
+
+        // find how far the COM has to move. negative = inwards
+        double r = hypot( b.y, b.x ); // distance between COM and grabbed part
+        double ds = hypot( a.y, a.x ) - r;
+
+        // parallel acceleration a = Fcosθ/m
+        // perpendicular acceleration α = τ/I = rFsinθ/I
+        // find dt/ds = α/a = (perpendicular/parallel) = (rFsinθ/I)/(Fcosθ/m) = (rm/I)tanθ
+        // multiply by ds to get dt.
+
+        double dt = ( r * grabbed_vehicle->total_mass() / grabbed_vehicle->moment_of_inertia() ) * tan( theta ) * std::abs( ds ); // (rm/I)tanθ * |ds|
+
+//add_msg( m_warning, "com:(%d,%d), a(F):(%d,%d), b(r):(%d,%d), theta=%.1f deg", com.x, com.y, a.x, a.y, b.x, b.y, theta * 180.0 / M_PI );
+//add_msg( m_warning, "r:%.2f, ds:%.2f, dt:%.1f deg", r, ds, dt * 180.0 / M_PI );
+
+            // Turn vehicle about COM
+int initial_face = grabbed_vehicle->face.dir();
+        grabbed_vehicle->turn( dt * 180.0 / M_PI );
+        grabbed_vehicle->face = grabbed_vehicle->turn_dir;
+//add_msg( m_warning, "face: initial=%d deg, final=%d, delta=%d deg",
+//        initial_face, grabbed_vehicle->face.dir(), grabbed_vehicle->face.dir() - initial_face );
+        grabbed_vehicle->precalc_mounts( 1, grabbed_vehicle->face.dir(), grabbed_vehicle->pivot_point() );
+
+        // Figure out where the grabbed part is, and move it to the destination
+        tripoint vehicle_position = grabbed_vehicle->global_pos3();
+        tripoint new_grabbed_part_position = vehicle_position + grabbed_vehicle->parts[grabbed_part].precalc[1];
+        tripoint delta_position = ( u.pos() + destination ) - new_grabbed_part_position;
+        m.displace_vehicle( vehicle_position, delta_position );
+
+        // Shift the grab point to the part's position
+        tripoint old = u.grab_point;
+        u.grab_point = grabbed_vehicle->global_part_pos3( grabbed_part ) - ( u.pos() + dp );
+//add_msg( m_warning, "u+dp:(%d,%d)+(%d,%d), part:(%d,%d). old grab:(%d,%d), new grab:(%d,%d)",
+//        u.pos().x, u.pos().y, dp.x, dp.y, grabbed_vehicle->global_part_pos3( grabbed_part ).x, grabbed_vehicle->global_part_pos3( grabbed_part ).y,
+//        old.x, old.y, u.grab_point.x, u.grab_point.y );
     }
 
     return false;
