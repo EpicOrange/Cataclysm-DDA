@@ -12647,22 +12647,37 @@ bool game::grabbed_veh_move( const tripoint &dp )
         movement_of_part_ray.advance();
         tripoint d_part( movement_of_part_ray.dx(), movement_of_part_ray.dy(), 0 );
         tripoint destination = u.grab_point + d_part;
+        tripoint com_relative_to_vehicle;
+        grabbed_vehicle->center_of_mass( com_relative_to_vehicle.x, com_relative_to_vehicle.y, true );
         // COM relative to player = u.grab_point + COM relative to vehicle - grabbed part relative to vehicle
-        tripoint com;
-        grabbed_vehicle->center_of_mass( com.x, com.y, true ); // com is now relative to vehicle
-        com = u.grab_point + ( com - grabbed_vehicle->parts[grabbed_part].precalc[0] ); // make relative to player
+        tripoint com = u.grab_point + ( com_relative_to_vehicle - grabbed_vehicle->parts[grabbed_part].precalc[0] );
 
         // theta is the angle between vectors a and b,
-        // where a = angle from COM to part's destination
-        // and b = angle from COM to grabbed part
+        // where a = from COM to part's destination
+        // and b = from COM to grabbed part
         tripoint a = destination - com; // vector from COM to destination, relative to player
-        tripoint b = u.grab_point - com; // vector from COM to grab, relative to player
+        // TODO Use doubles to store rotated part coordinates, get b (COM to part) from that
+        point mount_coords = grabbed_vehicle->parts[grabbed_part].mount;
+        int initial_face = grabbed_vehicle->face.dir();
+        double sin_rotation = -sin( initial_face * M_PI / 180.0 );
+        double cos_rotation = cos( initial_face * M_PI / 180.0 );
+        double part_relative_to_vehicle_x = mount_coords.x * cos_rotation + mount_coords.y * sin_rotation;
+        double part_relative_to_vehicle_y = mount_coords.y * cos_rotation - mount_coords.x * sin_rotation;
+        double bx = part_relative_to_vehicle_x - com_relative_to_vehicle.x;
+        double by = part_relative_to_vehicle_y - com_relative_to_vehicle.y;
+        add_msg( m_warning, "========" );
+        add_msg( m_warning, "rot:%d deg, com:(%d,%d), mount:(%d,%d), rotated:(%.2f,%.2f), b:(%.2f,%.2f)",
+                initial_face,
+                com_relative_to_vehicle.x, com_relative_to_vehicle.y,
+                mount_coords.x, mount_coords.y,
+                part_relative_to_vehicle_x, part_relative_to_vehicle_y,
+                bx, by );
+        tripoint b = u.grab_point - com; // vector from COM to grab
         double theta = 0.0;
         if( !( a.x == 0 && a.y == 0 ) && !( b.x == 0 && b.y == 0 ) ) {
             // Not dragging COM, or dragging to COM, so atan2 works
-            // Otherwise theta is 0 since there's no rotation anyways when you drag from/towards COM
             theta = atan2( a.y, a.x ) - atan2( b.y, b.x );
-        }
+        } // Otherwise theta is 0 since there's no rotation anyways when you drag from/towards COM
 
         // find how far the COM has to move. negative = inwards
         double r = hypot( b.y, b.x ); // distance between COM and grabbed part
@@ -12675,11 +12690,11 @@ bool game::grabbed_veh_move( const tripoint &dp )
 
         double dt = ( r * grabbed_vehicle->total_mass() / grabbed_vehicle->moment_of_inertia() ) * tan( theta ) * std::abs( ds ); // (rm/I)tanθ * |ds|
 
-//add_msg( m_warning, "com:(%d,%d), a(F):(%d,%d), b(r):(%d,%d), theta=%.1f deg", com.x, com.y, a.x, a.y, b.x, b.y, theta * 180.0 / M_PI );
+add_msg( m_warning, "===" );
+add_msg( m_warning, "com:(%d,%d), a(F):(%d,%d), b(r):(%d,%d), theta=%.1f deg", com.x, com.y, a.x, a.y, b.x, b.y, theta * 180.0 / M_PI );
 //add_msg( m_warning, "r:%.2f, ds:%.2f, dt:%.1f deg", r, ds, dt * 180.0 / M_PI );
 
             // Turn vehicle about COM
-int initial_face = grabbed_vehicle->face.dir();
         grabbed_vehicle->turn( dt * 180.0 / M_PI );
         grabbed_vehicle->face = grabbed_vehicle->turn_dir;
 //add_msg( m_warning, "face: initial=%d deg, final=%d, delta=%d deg",
