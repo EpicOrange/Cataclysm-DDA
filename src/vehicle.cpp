@@ -6469,8 +6469,7 @@ void vehicle::calc_mass_center( bool use_precalc ) const
 void vehicle::calc_moment_of_inertia() const {
 
     // Get center of mass, first
-    int x_com, y_com;
-    center_of_mass( x_com, y_com, false );
+    const point &com = local_center_of_mass();
 
     float I_total = 0.0f;
     for( size_t i = 0; i < parts.size(); i++ )
@@ -6486,8 +6485,8 @@ void vehicle::calc_moment_of_inertia() const {
         float I_part = m_part / 6.0f;
 
         // Parallel axis theorem I = I + Mh^2 to get I about COM
-        int dx = x_com - parts[i].mount.x;
-        int dy = y_com - parts[i].mount.y;
+        int dx = com.x - parts[i].mount.x;
+        int dy = com.y - parts[i].mount.y;
         int distancesq = ( dx * dx ) + ( dy * dy );
         I_total += I_part + ( m_part * distancesq );
     }
