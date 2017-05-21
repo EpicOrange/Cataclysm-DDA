@@ -1,3 +1,4 @@
+#pragma once
 #ifndef SOFTWARE_SOKOBAN_H
 #define SOFTWARE_SOKOBAN_H
 
@@ -6,6 +7,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <iosfwd>
 
 class sokoban_game
 {
@@ -41,7 +43,7 @@ class sokoban_game
         std::vector<std::vector<std::pair<int, int> > > vLevelDone;
         std::map<int, bool> mAlreadyWon;
 
-        bool parse_level();
+        void parse_level( std::istream &fin );
         bool check_win();
         int get_wall_connection( const int iY, const int iX );
         void draw_level( WINDOW *w_sokoban );

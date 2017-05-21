@@ -1,8 +1,9 @@
+#pragma once
 #ifndef COLOR_H
 #define COLOR_H
 
-#include "cursesdef.h"
 #include "json.h"
+#include <array>
 #include <string>
 #include <list>
 #include <unordered_map>
@@ -426,6 +427,7 @@ nc_color color_from_string( const std::string &color );
 std::string string_from_color( const nc_color color );
 nc_color bgcolor_from_string( std::string color );
 nc_color get_color_from_tag( const std::string &s, const nc_color base_color );
+std::string get_tag_from_color( const nc_color color );
 
 void setattr( nc_color &col, col_attribute attr );
 void load_colors( JsonObject &jo );

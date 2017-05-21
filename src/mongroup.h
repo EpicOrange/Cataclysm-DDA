@@ -1,3 +1,4 @@
+#pragma once
 #ifndef MONGROUP_H
 #define MONGROUP_H
 
@@ -15,14 +16,18 @@ class overmap;
 
 struct MonsterGroup;
 using mongroup_id = string_id<MonsterGroup>;
-struct mtype;
-using mtype_id = string_id<mtype>;
 
 struct mtype;
+using mtype_id = string_id<mtype>;
 
 struct MonsterGroupEntry;
 typedef std::vector<MonsterGroupEntry> FreqDef;
 typedef FreqDef::iterator FreqDef_iter;
+
+namespace io
+{
+struct object_archive_tag;
+}
 
 struct MonsterGroupEntry {
     mtype_id name;
@@ -38,7 +43,7 @@ struct MonsterGroupEntry {
     }
 
     MonsterGroupEntry( const mtype_id &id, int new_freq, int new_cost,
-                       int new_pack_max, int new_pack_min, int new_starts,
+                       int new_pack_min, int new_pack_max, int new_starts,
                        int new_ends )
         : name( id )
         , frequency( new_freq )
@@ -54,14 +59,11 @@ struct MonsterGroupResult {
     mtype_id name;
     int pack_size;
 
-    MonsterGroupResult()
-        : name( NULL_ID )
-        , pack_size( 0 ) {
+    MonsterGroupResult() : name( mtype_id::NULL_ID() ), pack_size( 0 ) {
     }
 
     MonsterGroupResult( const mtype_id &id, int new_pack_size )
-        : name( id )
-        , pack_size( new_pack_size ) {
+        : name( id ), pack_size( new_pack_size ) {
     }
 };
 
@@ -80,13 +82,15 @@ struct MonsterGroup {
 
 struct mongroup : public JsonSerializer, public JsonDeserializer {
     mongroup_id type;
-    tripoint pos;
-    unsigned int radius;
-    unsigned int population;
-    tripoint target; // location the horde is interested in.
-    int interest; //interest to target in percents
-    bool dying;
-    bool horde;
+    // Note: position is not saved as such in the json
+    // Instead, a vector of positions is saved for
+    tripoint pos = tripoint_zero;
+    unsigned int radius = 1;
+    unsigned int population = 1;
+    tripoint target = tripoint_zero; // location the horde is interested in.
+    int interest = 0; //interest to target in percents
+    bool dying = false;
+    bool horde = false;
     /** This property will be ignored if the vector is empty.
      *  Otherwise it will keep track of the individual monsters that
      *  are contained in this horde, and the population property will
@@ -99,8 +103,8 @@ struct mongroup : public JsonSerializer, public JsonDeserializer {
      *  And "roam", who roam around the map randomly, not taking care to return
      *  anywhere.
      */
-    std::string horde_behaviour;
-    bool diffuse;   // group size ind. of dist. from center and radius invariant
+    std::string horde_behaviour = "";
+    bool diffuse = false;   // group size ind. of dist. from center and radius invariant
     mongroup( const mongroup_id &ptype, int pposx, int pposy, int pposz,
               unsigned int prad, unsigned int ppop )
         : type( ptype )
@@ -147,8 +151,14 @@ struct mongroup : public JsonSerializer, public JsonDeserializer {
         }
         interest = set;
     }
+
+    template<typename Archive>
+    void io( Archive & );
+    using archive_type_tag = io::object_archive_tag;
+
     using JsonDeserializer::deserialize;
     void deserialize( JsonIn &jsin ) override;
+    void deserialize_legacy( JsonIn &jsin );
 
     using JsonSerializer::serialize;
     void serialize( JsonOut &jsout ) const override;

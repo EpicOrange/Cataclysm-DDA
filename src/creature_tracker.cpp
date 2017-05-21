@@ -1,9 +1,12 @@
 #include "creature_tracker.h"
+#include "pathfinding.h"
 #include "monster.h"
 #include "mongroup.h"
 #include "debug.h"
 #include "mtype.h"
 #include "item.h"
+
+#define dbg(x) DebugLog((DebugLevel)(x),D_GAME) << __FILE__ << ":" << __LINE__ << ": "
 
 Creature_tracker::Creature_tracker()
 {
@@ -46,7 +49,7 @@ int Creature_tracker::mon_at( const tripoint &coords ) const
 
 bool Creature_tracker::add( monster &critter )
 {
-    if( critter.type->id == NULL_ID ) { // Don't wanna spawn null monsters o.O
+    if( critter.type->id.is_null() ) { // Don't wanna spawn null monsters o.O
         return false;
     }
 
@@ -218,4 +221,23 @@ void Creature_tracker::swap_positions( monster &first, monster &second )
         // Try to avoid spamming error messages if something weird happens
         rebuild_cache();
     }
+}
+
+bool Creature_tracker::kill_marked_for_death()
+{
+    // Important: `Creature::die` must not be called after creature objects (NPCs, monsters) have
+    // been removed, the dying creature could still have a pointer (the killer) to another creature.
+    bool monster_is_dead = false;
+    for( monster *mon : monsters_list ) {
+        monster &critter = *mon;
+        if( critter.is_dead() ) {
+            dbg( D_INFO ) << string_format( "cleanup_dead: critter %d,%d,%d hp:%d %s",
+                                            critter.posx(), critter.posy(), critter.posz(),
+                                            critter.get_hp(), critter.name().c_str() );
+            critter.die( nullptr );
+            monster_is_dead = true;
+        }
+    }
+
+    return monster_is_dead;
 }

@@ -1,3 +1,4 @@
+#pragma once
 #ifndef ITEM_ACTION_H
 #define ITEM_ACTION_H
 
@@ -44,6 +45,7 @@ class item_action_generator
         // Returns (translated) name of action
         std::string get_action_name( const item_action_id &id ) const;
 
+        bool action_exists( const item_action_id &id ) const;
         const item_action &get_action( const item_action_id &id ) const;
 
         const action_map &get_item_action_map() const {
@@ -51,6 +53,7 @@ class item_action_generator
         }
 
         void load_item_action( JsonObject &jo );
+        void check_consistency() const;
 };
 
 

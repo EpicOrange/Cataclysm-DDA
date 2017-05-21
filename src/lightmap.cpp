@@ -12,6 +12,7 @@
 #include "mtype.h"
 #include "weather.h"
 #include "shadowcasting.h"
+#include "messages.h"
 
 #include <cmath>
 #include <cstring>
@@ -22,6 +23,7 @@
 #define LIGHTMAP_CACHE_Y SEEY * MAPSIZE
 
 const efftype_id effect_onfire( "onfire" );
+const efftype_id effect_haslight( "haslight" );
 
 constexpr double PI     = 3.14159265358979323846;
 constexpr double HALFPI = 1.57079632679489661923;
@@ -57,7 +59,7 @@ void map::build_transparency_cache( const int zlev )
 
     // Default to just barely not transparent.
     std::uninitialized_fill_n(
-        &transparency_cache[0][0], MAPSIZE*SEEX * MAPSIZE*SEEY, LIGHT_TRANSPARENCY_OPEN_AIR);
+        &transparency_cache[0][0], MAPSIZE*SEEX * MAPSIZE*SEEY, static_cast<float>( LIGHT_TRANSPARENCY_OPEN_AIR ) );
 
     // Traverse the submaps in order
     for( int smx = 0; smx < my_MAPSIZE; ++smx ) {
@@ -128,11 +130,21 @@ void map::build_transparency_cache( const int zlev )
     map_cache.transparency_cache_dirty = false;
 }
 
-void map::apply_character_light( const player &p )
+void map::apply_character_light( player &p )
 {
+    if( p.has_effect( effect_onfire ) ) {
+        apply_light_source( p.pos(), 8 );
+    } else if( p.has_effect( effect_haslight ) ) {
+        apply_light_source( p.pos(), 4 );
+    }
+
     float const held_luminance = p.active_light();
     if( held_luminance > LIGHT_AMBIENT_LOW ) {
         apply_light_source( p.pos(), held_luminance );
+    }
+
+    if( held_luminance >= 4 && held_luminance > ambient_light_at( p.pos() ) - 0.5f ) {
+        p.add_effect( effect_haslight, 1 );
     }
 }
 
@@ -157,9 +169,9 @@ void map::generate_lightmap( const int zlev )
     auto &light_source_buffer = map_cache.light_source_buffer;
     std::memset(light_source_buffer, 0, sizeof(light_source_buffer));
 
-    constexpr int dir_x[] = {  0, -1 , 1, 0 };   //    [0]
-    constexpr int dir_y[] = { -1,  0 , 0, 1 };   // [1][X][2]
-    constexpr int dir_d[] = { 90, 0, 180, 270 }; //    [3]
+    constexpr std::array<int, 4> dir_x = {{  0, -1 , 1, 0 }};   //    [0]
+    constexpr std::array<int, 4> dir_y = {{ -1,  0 , 0, 1 }};   // [1][X][2]
+    constexpr std::array<int, 4> dir_d = {{ 90, 0, 180, 270 }}; //    [3]
 
     const float natural_light  = g->natural_light_level( zlev );
     const float inside_light = (natural_light > LIGHT_SOURCE_BRIGHT) ?
@@ -299,76 +311,47 @@ void map::generate_lightmap( const int zlev )
     VehicleList vehs = get_vehicles();
     for( auto &vv : vehs ) {
         vehicle *v = vv.v;
-        if(v->lights_on) {
-            int dir = v->face.dir();
-            float veh_luminance = 0.0;
-            float iteration = 1.0;
-            std::vector<int> light_indices = v->all_parts_with_feature(VPFLAG_CONE_LIGHT);
-            for( auto &light_indice : light_indices ) {
-                veh_luminance += ( v->part_info( light_indice ).bonus / iteration );
+
+        auto lights = v->lights( true );
+
+        float veh_luminance = 0.0;
+        float iteration = 1.0;
+
+        for( const auto pt : lights ) {
+            const auto &vp = pt->info();
+            if( vp.has_flag( VPFLAG_CONE_LIGHT ) ) {
+                veh_luminance += vp.bonus / iteration;
                 iteration = iteration * 1.1;
             }
-            if (veh_luminance > LL_LIT) {
-                for( auto &light_indice : light_indices ) {
-                    tripoint pp = tripoint( vv.x, vv.y, vv.z ) +
-                                  v->parts[light_indice].precalc[0];
-                    if( inbounds( pp ) ) {
-                        add_light_source( pp, SQRT_2 ); // Add a little surrounding light
-                        apply_light_arc( pp, dir + v->parts[light_indice].direction,
-                                         veh_luminance, 45 );
-                    }
-                }
-            }
         }
-        if(v->overhead_lights_on) {
-            std::vector<int> light_indices = v->all_parts_with_feature(VPFLAG_CIRCLE_LIGHT);
-            for( auto &light_indice : light_indices ) {
-                if( ( calendar::turn % 2 &&
-                      v->part_info( light_indice ).has_flag( VPFLAG_ODDTURN ) ) ||
-                    ( !( calendar::turn % 2 ) &&
-                      v->part_info( light_indice ).has_flag( VPFLAG_EVENTURN ) ) ||
-                    ( !v->part_info( light_indice ).has_flag( VPFLAG_EVENTURN ) &&
-                      !v->part_info( light_indice ).has_flag( VPFLAG_ODDTURN ) ) ) {
-                    tripoint pp = tripoint( vv.x, vv.y, vv.z ) +
-                                  v->parts[light_indice].precalc[0];
-                    if(inbounds( pp )) {
-                        add_light_source( pp, v->part_info( light_indice ).bonus );
-                    }
-                }
+
+        for( const auto pt : lights ) {
+            const auto &vp = pt->info();
+            tripoint src = v->global_part_pos3( *pt );
+
+            if( !inbounds( src ) ) {
+                continue;
             }
-        }
-        // why reinvent the [lightmap] wheel
-        if(v->dome_lights_on) {
-            std::vector<int> light_indices = v->all_parts_with_feature(VPFLAG_DOME_LIGHT);
-            for( auto &light_indice : light_indices ) {
-                tripoint pp = tripoint( vv.x, vv.y, vv.z ) +
-                              v->parts[light_indice].precalc[0];
-                if( inbounds( pp )) {
-                    add_light_source( pp, v->part_info( light_indice ).bonus );
+
+            if( vp.has_flag( VPFLAG_CONE_LIGHT ) ) {
+                if( veh_luminance > LL_LIT ) {
+                    add_light_source( src, SQRT_2 ); // Add a little surrounding light
+                    apply_light_arc( src, v->face.dir() + pt->direction, veh_luminance, 45 );
                 }
-            }
-        }
-        if(v->aisle_lights_on) {
-            std::vector<int> light_indices = v->all_parts_with_feature(VPFLAG_AISLE_LIGHT);
-            for( auto &light_indice : light_indices ) {
-                tripoint pp = tripoint( vv.x, vv.y, vv.z ) +
-                              v->parts[light_indice].precalc[0];
-                if( inbounds( pp )) {
-                    add_light_source( pp, v->part_info( light_indice ).bonus );
+
+            } else if( vp.has_flag( VPFLAG_CIRCLE_LIGHT ) ) {
+                if( (    calendar::turn % 2   && vp.has_flag( VPFLAG_ODDTURN  ) ) ||
+                    ( !( calendar::turn % 2 ) && vp.has_flag( VPFLAG_EVENTURN ) ) ||
+                    ( !( vp.has_flag( VPFLAG_EVENTURN ) || vp.has_flag( VPFLAG_ODDTURN ) ) ) ) {
+
+                    add_light_source( src, vp.bonus );
                 }
+
+            } else {
+                add_light_source( src, vp.bonus );
             }
-        }
-        if(v->has_atomic_lights) {
-            // atomic light is always on
-            std::vector<int> light_indices = v->all_parts_with_feature(VPFLAG_ATOMIC_LIGHT);
-            for( auto &light_indice : light_indices ) {
-                tripoint pp = tripoint( vv.x, vv.y, vv.z ) +
-                              v->parts[light_indice].precalc[0];
-                if(inbounds( pp )) {
-                    add_light_source( pp, v->part_info( light_indice ).bonus );
-                }
-            }
-        }
+        };
+
         for( size_t p = 0; p < v->parts.size(); ++p ) {
             tripoint pp = tripoint( vv.x, vv.y, vv.z ) +
                           v->parts[p].precalc[0];
@@ -489,8 +472,6 @@ bool map::pl_line_of_sight( const tripoint &t, const int max_range ) const
     // Any epsilon > 0 is fine - it means lightmap processing visited the point
     return map_cache.seen_cache[t.x][t.y] > 0.0f;
 }
-
-#include "messages.h"
 
 template<int xx, int xy, int xz, int yx, int yy, int yz, int zz,
          float(*calc)(const float &, const float &, const int &),
@@ -685,9 +666,8 @@ void cast_zlight(
  * field of view, whereas a value equal to or above 1 means that cell is
  * in the field of view.
  *
- * @param startx the horizontal component of the starting location
- * @param starty the vertical component of the starting location
- * @param radius the maximum distance to draw the FOV
+ * @param origin the starting location
+ * @param target_z Z-level to draw light map on
  */
 void map::build_seen_cache( const tripoint &origin, const int target_z )
 {
@@ -695,8 +675,9 @@ void map::build_seen_cache( const tripoint &origin, const int target_z )
     float (&transparency_cache)[MAPSIZE*SEEX][MAPSIZE*SEEY] = map_cache.transparency_cache;
     float (&seen_cache)[MAPSIZE*SEEX][MAPSIZE*SEEY] = map_cache.seen_cache;
 
+    constexpr float light_transparency_solid = LIGHT_TRANSPARENCY_SOLID;
     std::uninitialized_fill_n(
-        &seen_cache[0][0], MAPSIZE*SEEX * MAPSIZE*SEEY, LIGHT_TRANSPARENCY_SOLID);
+        &seen_cache[0][0], MAPSIZE*SEEX * MAPSIZE*SEEY, light_transparency_solid );
 
     if( !fov_3d ) {
         seen_cache[origin.x][origin.y] = LIGHT_TRANSPARENCY_CLEAR;
@@ -822,7 +803,7 @@ void map::build_seen_cache( const tripoint &origin, const int target_z )
             offsetDistance = rl_dist(origin.x, origin.y, mirror_pos.x, mirror_pos.y);
         } else {
             offsetDistance = 60 - veh->part_info( mirror ).bonus *
-                                  veh->parts[mirror].hp / veh->part_info( mirror ).durability;
+                                  veh->parts[ mirror ].hp() / veh->part_info( mirror ).durability;
             seen_cache[mirror_pos.x][mirror_pos.y] = LIGHT_TRANSPARENCY_OPEN_AIR;
         }
 
@@ -914,6 +895,10 @@ void castLight( float (&output_cache)[MAPSIZE*SEEX][MAPSIZE*SEEY],
                 } else {
                     // Note this is the same slope as the recursive call we just made.
                     start = trailingEdge;
+                }
+                // Trailing edge ahead of leading edge means this span is fully processed.
+                if( start < end ) {
+                    return;
                 }
                 current_transparency = new_transparency;
             }

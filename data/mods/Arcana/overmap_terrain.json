@@ -88,6 +88,25 @@
         "see_cost" : 5
     },{
         "type" : "overmap_terrain",
+        "id" : "impact_roof_left",
+        "name" : "open air",
+        "sym" : 46,
+        "color" : "blue"
+    },{
+        "type" : "overmap_terrain",
+        "id" : "impact_roof_center",
+        "name" : "open air",
+        "sym" : 46,
+        "color" : "blue",
+        "flags" : [ "NO_ROTATE" ]
+    },{
+        "type" : "overmap_terrain",
+        "id" : "impact_roof_right",
+        "name" : "open air",
+        "sym" : 46,
+        "color" : "blue"
+    },{
+        "type" : "overmap_terrain",
         "id" : "island_temple_1",
         "name" : "peculiar shrine",
         "sym" : 84,

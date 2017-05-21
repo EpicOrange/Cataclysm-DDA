@@ -1,3 +1,4 @@
+#pragma once
 #ifndef SCENARIO_H
 #define SCENARIO_H
 
@@ -19,6 +20,8 @@ class start_location;
 using start_location_id = string_id<start_location>;
 template<typename T>
 class generic_factory;
+struct mutation_branch;
+using trait_id = string_id<mutation_branch>;
 
 class scenario
 {
@@ -32,29 +35,31 @@ private:
     std::string _name_female;
     std::string _description_male;
     std::string _description_female;
-    std::string _gender_req;
     std::string _start_name;
-    std::vector<string_id<profession>> _allowed_professions;
-    std::set<std::string> _allowed_traits;
-    std::set<std::string> _forced_traits;
-    std::set<std::string> _forbidden_traits;
+
+    bool blacklist = false; // If true, professions is a blacklist.
+    std::vector<string_id<profession>> professions; // as specified in JSON, verbatim
+
+    /**
+     * @ref permitted_professions populates this vector on the first call, which takes
+     * a bit of work. On subsequent calls, this vector is returned.
+    */
+    mutable std::vector<string_id<profession>> cached_permitted_professions;
+
+    std::set<trait_id> _allowed_traits;
+    std::set<trait_id> _forced_traits;
+    std::set<trait_id> _forbidden_traits;
     std::vector<start_location_id> _allowed_locs;
-    int _mission;
-    std::vector<std::string> traits;
     int _point_cost;
-//Gender variations left in for translation purposes
-    std::vector<std::string> _starting_items;
-    std::vector<std::string> _starting_items_male;
-    std::vector<std::string> _starting_items_female;
     std::set<std::string> flags; // flags for some special properties of the scenario
     std::string _map_special;
 
-    void load( JsonObject &jo );
+    void load( JsonObject &jo, const std::string &src );
 
 public:
     //these three aren't meant for external use, but had to be made public regardless
     scenario();
-    static void load_scenario(JsonObject &jsobj);
+    static void load_scenario( JsonObject &jo, const std::string &src );
 
     // these should be the only ways used to get at scenario
     static const scenario* generic(); // points to the generic, default profession
@@ -72,32 +77,30 @@ public:
     const string_id<scenario> &ident() const;
     std::string gender_appropriate_name(bool male) const;
     std::string description(bool male) const;
-    std::string gender_req() const;
     start_location_id start_location() const;
     start_location_id random_start_location() const;
     std::string start_name() const;
-    const profession* get_profession() const;
-    const profession* random_profession() const;
-    bool profquery( const string_id<profession> &proff ) const;
-    bool traitquery(std::string trait) const;
-    bool locked_traits(std::string trait) const;
-    bool forbidden_traits(std::string trait) const;
+
+    const profession* weighted_random_profession() const;
+    std::vector<string_id<profession>> permitted_professions() const;
+
+    bool traitquery( const trait_id &trait ) const;
+    std::set<trait_id> get_locked_traits() const;
+    bool is_locked_trait( const trait_id &trait ) const;
+    bool is_forbidden_trait( const trait_id &trait ) const;
+
     bool allowed_start( const start_location_id &loc ) const;
-    int profsize() const;
-    int mission() const;
     signed int point_cost() const;
-    std::vector<std::string> items() const;
-    std::vector<std::string> items_male() const;
-    std::vector<std::string> items_female() const;
     bool has_map_special() const;
     const std::string& get_map_special() const;
 
-
     /**
-     * Check if this type of scenario has a certain flag set.
-     *
-     * Current flags: none
-     */
+     * Returns "All", "Limited", or "Almost all" (translated)
+     * This is used by newcharacter.cpp
+    */
+    std::string prof_count_str() const;
+
+    /** Such as a seasonal start, fiery start, surrounded start, etc. */
     bool has_flag(std::string flag) const;
 
     /**

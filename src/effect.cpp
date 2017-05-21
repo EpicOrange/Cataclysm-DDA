@@ -12,6 +12,7 @@ namespace {
 std::map<efftype_id, effect_type> effect_types;
 }
 
+/** @relates string_id */
 template<>
 const effect_type& string_id<effect_type>::obj() const
 {
@@ -24,14 +25,12 @@ const effect_type& string_id<effect_type>::obj() const
     return iter->second;
 }
 
+/** @relates string_id */
 template<>
 bool string_id<effect_type>::is_valid() const
 {
     return effect_types.count( *this ) > 0;
 }
-
-template<>
-const efftype_id string_id<effect_type>::NULL_ID( "null" );
 
 const efftype_id effect_weed_high( "weed_high" );
 
@@ -136,9 +135,9 @@ void weed_msg(player *p) {
         case 1: // Real Life
             p->add_msg_if_player(_("Man, a cheeseburger sounds SO awesome right now."));
             p->mod_hunger(4);
-            if(p->has_trait("VEGETARIAN")) {
+            if( p->has_trait( trait_id( "VEGETARIAN" ) ) ) {
                 p->add_msg_if_player(_("Eh... maybe not."));
-            } else if(p->has_trait("LACTOSE")) {
+            } else if( p->has_trait( trait_id( "LACTOSE" ) ) ) {
                 p->add_msg_if_player(_("I guess, maybe, without the cheese... yeah."));
             }
             return;
@@ -446,7 +445,7 @@ std::string effect::disp_name() const
     }
 
     // End result should look like "name (l. arm)" or "name [intensity] (l. arm)"
-    std::stringstream ret;
+    std::ostringstream ret;
     if (eff_type->use_name_ints()) {
         if(eff_type->name[intensity - 1] == "") {
             return "";
@@ -479,7 +478,7 @@ struct desc_freq {
 
 std::string effect::disp_desc(bool reduced) const
 {
-    std::stringstream ret;
+    std::ostringstream ret;
     // First print stat changes, adding + if value is positive
     int tmp = get_avg_mod("STR", reduced);
     if (tmp > 0) {
@@ -576,52 +575,16 @@ std::string effect::disp_desc(bool reduced) const
         }
     }
     if (constant.size() > 0) {
-        ret << _("Const: ");
-        for (size_t i = 0; i < constant.size(); i++) {
-            if (i == 0) {
-                // No comma on the first one
-                ret << constant[i];
-            } else {
-                ret << ", " << constant[i];
-            }
-        }
-        ret << " ";
+        ret << _("Const: ") << enumerate_as_string( constant ) << " ";
     }
     if (frequent.size() > 0) {
-        ret << _("Freq: ");
-        for (size_t i = 0; i < frequent.size(); i++) {
-            if (i == 0) {
-                // No comma on the first one
-                ret << frequent[i];
-            } else {
-                ret << ", " << frequent[i];
-            }
-        }
-        ret << " ";
+        ret << _("Freq: ") << enumerate_as_string( frequent ) << " ";
     }
     if (uncommon.size() > 0) {
-        ret << _("Unfreq: ");
-        for (size_t i = 0; i < uncommon.size(); i++) {
-            if (i == 0) {
-                // No comma on the first one
-                ret << uncommon[i];
-            } else {
-                ret << ", " << uncommon[i];
-            }
-        }
-        ret << " ";
+        ret << _("Unfreq: ") << enumerate_as_string( uncommon ) << " ";
     }
     if (rare.size() > 0) {
-        ret << _("Rare: ");
-        for (size_t i = 0; i < rare.size(); i++) {
-            if (i == 0) {
-                // No comma on the first one
-                ret << rare[i];
-            } else {
-                ret << ", " << rare[i];
-            }
-        }
-        // No space needed at the end
+        ret << _("Rare: ") << enumerate_as_string( rare ); // No space needed at the end
     }
 
     // Newline if necessary
@@ -659,44 +622,18 @@ void effect::decay(std::vector<efftype_id> &rem_ids, std::vector<body_part> &rem
                    unsigned int turn, bool player)
 {
     // Decay duration if not permanent
-    if (!is_permanent()) {
-        duration -= 1;
-        add_msg( m_debug, "ID: %s, Duration %d", get_id().c_str(), duration );
+    if( !is_permanent() ) {
+        mod_duration( -1, player );
     }
-    // Store current intensity for comparison later
-    int tmp_int = intensity;
 
-    // Fix bad intensities
-    if (intensity < 1) {
-        add_msg( m_debug, "Bad intensity, ID: %s", get_id().c_str() );
-        intensity = 1;
-    } else if (intensity > 1) {
-        // Decay intensity if necessary
-        if (eff_type->int_decay_tick != 0 && turn % eff_type->int_decay_tick == 0) {
-            intensity += eff_type->int_decay_step;
-        }
-    }
-    // Force intensity if it is duration based
-    if (eff_type->int_dur_factor != 0) {
-        // + 1 here so that the lowest is intensity 1, not 0
-        intensity = (duration / eff_type->int_dur_factor) + 1;
-    }
-    // Bound intensity to [1, max_intensity]
-    if (intensity > eff_type->max_intensity) {
-        intensity = eff_type->max_intensity;
-    }
-    if (intensity < 1) {
-        intensity = 1;
-    }
-    // Display decay message if available
-    if (player && tmp_int > intensity && (intensity - 1) < int(eff_type->decay_msgs.size())) {
-        // -1 because intensity = 1 is the first message
-        add_msg(eff_type->decay_msgs[intensity - 1].second,
-                eff_type->decay_msgs[intensity - 1].first.c_str());
+    // Decay intensity if supposed to do so
+    // @todo Remove effects that would decay to 0 intensity?
+    if( intensity > 1 && eff_type->int_decay_tick != 0 && turn % eff_type->int_decay_tick == 0 ) {
+        set_intensity( intensity + eff_type->int_decay_step, player );
     }
 
     // Add to removal list if duration is <= 0
-    if (duration <= 0) {
+    if( duration <= 0 ) {
         rem_ids.push_back(get_id());
         rem_bps.push_back(bp);
     }
@@ -715,29 +652,29 @@ int effect::get_max_duration() const
 {
     return eff_type->max_duration;
 }
-void effect::set_duration(int dur)
+void effect::set_duration( int dur, bool alert )
 {
     duration = dur;
     // Cap to max_duration if it exists
-    if (eff_type->max_duration > 0 && duration > eff_type->max_duration) {
+    if( eff_type->max_duration > 0 && duration > eff_type->max_duration ) {
         duration = eff_type->max_duration;
     }
+
+    // Force intensity if it is duration based
+    if( eff_type->int_dur_factor != 0 ) {
+        // + 1 here so that the lowest is intensity 1, not 0
+        set_intensity( ( duration / eff_type->int_dur_factor ) + 1, alert );
+    }
+
+    add_msg( m_debug, "ID: %s, Duration %d", get_id().c_str(), duration );
 }
-void effect::mod_duration(int dur)
+void effect::mod_duration( int dur, bool alert )
 {
-    duration += dur;
-    // Cap to max_duration if it exists
-    if (eff_type->max_duration > 0 && duration > eff_type->max_duration) {
-        duration = eff_type->max_duration;
-    }
+    set_duration( duration + dur, alert );
 }
-void effect::mult_duration(double dur)
+void effect::mult_duration( double dur, bool alert )
 {
-    duration *= dur;
-    // Cap to max_duration if it exists
-    if (eff_type->max_duration > 0 && duration > eff_type->max_duration) {
-        duration = eff_type->max_duration;
-    }
+    set_duration( duration * dur, alert );
 }
 
 int effect::get_start_turn() const
@@ -775,28 +712,41 @@ int effect::get_max_intensity() const
 {
     return eff_type->max_intensity;
 }
-void effect::set_intensity(int nintensity)
+
+int effect::set_intensity( int val, bool alert )
 {
-    intensity = nintensity;
-    // Cap to [1, max_intensity]
-    if (intensity > eff_type->max_intensity) {
-        intensity = eff_type->max_intensity;
-    } else if (intensity < 1) {
+    if( intensity < 1 ) {
+        // Fix bad intensity
+        add_msg( m_debug, "Bad intensity, ID: %s", get_id().c_str() );
         intensity = 1;
     }
-}
-void effect::mod_intensity(int nintensity)
-{
-    intensity += nintensity;
-    // Cap to [1, max_intensity]
-    if (intensity > eff_type->max_intensity) {
-        intensity = eff_type->max_intensity;
-    } else if (intensity < 1) {
-        intensity = 1;
+
+    val = std::max( std::min( val, eff_type->max_intensity ), 1 );
+    if( val == intensity ) {
+        // Nothing to change
+        return intensity;
     }
+
+    if( alert && val < intensity && val - 1 < int( eff_type->decay_msgs.size() ) ) {
+        add_msg( eff_type->decay_msgs[ val - 1 ].second,
+                 eff_type->decay_msgs[ val - 1 ].first.c_str() );
+    }
+
+    int old_intensity = intensity;
+    intensity = val;
+    if( old_intensity != intensity ) {
+        add_msg( m_debug, "%s intensity %d->%d", get_id().c_str(), old_intensity, intensity );
+    }
+
+    return intensity;
 }
 
-const std::vector<std::string> &effect::get_resist_traits() const
+int effect::mod_intensity( int mod, bool alert )
+{
+    return set_intensity( intensity + mod, alert );
+}
+
+const std::vector<trait_id> &effect::get_resist_traits() const
 {
     return eff_type->resist_traits;
 }
@@ -978,7 +928,7 @@ double effect::get_percentage(std::string arg, int val, bool reduced) const
     if (found_tick_base != mod_data.end()) {
         tick += found_tick_base->second;
     }
-    if (found_bot_scale != mod_data.end()) {
+    if (found_tick_scale != mod_data.end()) {
         tick += found_tick_scale->second * (intensity - 1);
     }
     // Tick is the exception where tick = 0 means tick = 1
@@ -1052,7 +1002,7 @@ bool effect::activated(int turn, std::string arg, int val, bool reduced, double 
     if (found_tick_base != mod_data.end()) {
         tick += found_tick_base->second;
     }
-    if (found_bot_scale != mod_data.end()) {
+    if (found_tick_scale != mod_data.end()) {
         tick += found_tick_scale->second * (intensity - 1);
     }
     // Tick is the exception where tick = 0 means tick = 1
@@ -1081,7 +1031,7 @@ bool effect::activated(int turn, std::string arg, int val, bool reduced, double 
     return false;
 }
 
-double effect::get_addict_mod(std::string arg, int addict_level) const
+double effect::get_addict_mod( const std::string &arg, int addict_level ) const
 {
     // TODO: convert this to JSON id's and values once we have JSON'ed addictions
     if (arg == "PKILL") {
@@ -1131,10 +1081,29 @@ std::string effect::get_speed_name() const
     }
 }
 
+bool effect::impairs_movement() const
+{
+    return eff_type->impairs_movement;
+}
+
 const effect_type *effect::get_effect_type() const
 {
     return eff_type;
 }
+
+// This contains all the effects checked in move_effects
+// It's here and not in json because it is hardcoded anyway
+static const std::unordered_set<efftype_id> hardcoded_movement_impairing = {{
+    efftype_id( "beartrap" ),
+    efftype_id( "crushed" ),
+    efftype_id( "downed" ),
+    efftype_id( "grabbed" ),
+    efftype_id( "heavysnare" ),
+    efftype_id( "in_pit" ),
+    efftype_id( "lightsnare" ),
+    efftype_id( "tied" ),
+    efftype_id( "webbed" ),
+}};
 
 void load_effect_type(JsonObject &jo)
 {
@@ -1164,14 +1133,10 @@ void load_effect_type(JsonObject &jo)
         while (jsarr.has_more()) {
             new_etype.reduced_desc.push_back(jsarr.next_string());
         }
-    } else if (jo.has_member("desc")) {
-        JsonArray jsarr = jo.get_array("desc");
-        while (jsarr.has_more()) {
-            new_etype.reduced_desc.push_back(jsarr.next_string());
-        }
     } else {
-        new_etype.reduced_desc.push_back("");
+        new_etype.reduced_desc = new_etype.desc;
     }
+
     new_etype.part_descs = jo.get_bool("part_descs", false);
 
     if(jo.has_member("rating")) {
@@ -1195,7 +1160,9 @@ void load_effect_type(JsonObject &jo)
     new_etype.apply_memorial_log = jo.get_string("apply_memorial_log", "");
     new_etype.remove_memorial_log = jo.get_string("remove_memorial_log", "");
 
-    new_etype.resist_traits = jo.get_string_array("resist_traits");
+    for( auto &&f : jo.get_string_array( "resist_traits" ) ) {
+        new_etype.resist_traits.push_back( trait_id( f ) );
+    }
     for( auto &&f : jo.get_string_array( "resist_effects" ) ) {
         new_etype.resist_effects.push_back( efftype_id( f ) );
     }
@@ -1226,6 +1193,8 @@ void load_effect_type(JsonObject &jo)
 
     new_etype.load_mod_data(jo, "base_mods");
     new_etype.load_mod_data(jo, "scaling_mods");
+
+    new_etype.impairs_movement = hardcoded_movement_impairing.count( new_etype.id ) > 0;
 
     effect_types[new_etype.id] = new_etype;
 

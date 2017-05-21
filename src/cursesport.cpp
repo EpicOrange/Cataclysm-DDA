@@ -31,8 +31,11 @@
 
 WINDOW *mainwin;
 WINDOW *stdscr;
-pairs *colorpairs;   //storage for pair'ed colored, should be dynamic, meh
+std::array<pairs, 100> colorpairs;   //storage for pair'ed colored
 int echoOn;     //1 = getnstr shows input, 0 = doesn't show. needed for echo()-ncurses compatibility.
+
+// allow extra logic for framebuffer clears
+extern void handle_additional_window_clear( WINDOW* win );
 
 //***********************************
 //Pseudo-Curses Functions           *
@@ -285,66 +288,6 @@ int wredrawln( WINDOW* /*win*/, int /*beg_line*/, int /*num_lines*/ ) {
     return OK;
 }
 
-int getch(void)
-{
-    return wgetch(mainwin);
-}
-
-int wgetch(WINDOW *win)
-{
-    return curses_getch(win);
-}
-
-int mvgetch(int y, int x)
-{
-    move(y, x);
-    return getch();
-}
-
-int mvwgetch(WINDOW *win, int y, int x)
-{
-    move(y, x);
-    return wgetch(win);
-}
-
-int getnstr(char *str, int size)
-{
-    int startX = mainwin->cursorx;
-    int count = 0;
-    char input;
-    while(true) {
-        input = getch();
-        // Carriage return, Line feed and End of File terminate the input.
-        if( input == '\r' || input == '\n' || input == '\x04' ) {
-            str[count] = '\x00';
-            return count;
-        } else if( input == 127 ) { // Backspace, remapped from \x8 in ProcessMessages()
-            if( count == 0 ) {
-                continue;
-            }
-            str[count] = '\x00';
-            if(echoOn == 1) {
-                mvaddch(mainwin->cursory, startX + count, ' ');
-            }
-            --count;
-            if(echoOn == 1) {
-                move(mainwin->cursory, startX + count);
-            }
-        } else {
-            if( count >= size - 1 ) { // Still need space for trailing 0x00
-                continue;
-            }
-            str[count] = input;
-            ++count;
-            if(echoOn == 1) {
-                move(mainwin->cursory, startX + count);
-                mvaddch(mainwin->cursory, startX + count, input);
-            }
-        }
-    }
-    return count;
-}
-
 // Get a sequence of Unicode code points, store them in target
 // return the display width of the extracted string.
 inline int fill(const char *&fmt, int &len, std::string &target)
@@ -546,6 +489,8 @@ int werase(WINDOW *win)
     win->draw = true;
     wmove(win, 0, 0);
     //    wrefresh(win);
+    handle_additional_window_clear( win );
+
     return 1;
 }
 
@@ -788,11 +733,6 @@ int move(int y, int x)
     return wmove(mainwin, y, x);
 }
 
-//Set the amount of time getch waits for input
-void timeout(int delay)
-{
-    curses_timeout(delay);
-}
 void set_escdelay(int) { } //PORTABILITY, DUMMY FUNCTION
 
 

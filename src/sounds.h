@@ -1,3 +1,4 @@
+#pragma once
 #ifndef SOUNDS_H
 #define SOUNDS_H
 
@@ -17,12 +18,16 @@ namespace sounds
 // Methods for recording sound events.
 /**
  * Sound at (p) of intensity (vol)
+ *
+ * If the description parameter is a non-empty string, then a string message about the
+ * sound is generated for the player.
+ *
  * @param p position of sound.
  * @param vol Volume of sound.
- * @param description Description of the sound for the player,
- * if non-empty string a message is generated.
- * @param ambient If false, the sound interrupts player activities.
- * If true, activities continue.
+ * @param description Description of the sound for the player
+ * @param ambient Sound does not interrupt player activity if this is true
+ * @param id Id of sound effect
+ * @param variant Variant of sound effect given in id
  * @returns true if the player could hear the sound.
  */
 void sound( const tripoint &p, int vol, std::string description, bool ambient = false,
@@ -49,8 +54,6 @@ std::pair<std::vector<tripoint>, std::vector<tripoint>> get_monster_sounds();
 // retrieve the sound event(s?) at a location.
 std::string sound_at( const tripoint &location );
 }
-
-typedef std::string ter_type;
 
 namespace sfx
 {

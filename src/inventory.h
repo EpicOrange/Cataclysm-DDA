@@ -1,3 +1,4 @@
+#pragma once
 #ifndef INVENTORY_H
 #define INVENTORY_H
 
@@ -10,6 +11,7 @@
 #include <utility>
 #include <vector>
 #include <functional>
+#include <unordered_map>
 
 class map;
 class npc;
@@ -18,7 +20,7 @@ typedef std::list< std::list<item> > invstack;
 typedef std::vector< std::list<item>* > invslice;
 typedef std::vector< const std::list<item>* > const_invslice;
 typedef std::vector< std::pair<std::list<item>*, int> > indexed_invslice;
-typedef std::function<bool(const item &)> item_filter;
+typedef std::unordered_map< itype_id, std::list<const item *> > itype_bin;
 
 class salvage_actor;
 
@@ -74,15 +76,6 @@ class inventory : public visitable<inventory>
         inventory  operator+  (const item &rhs);
         inventory  operator+  (const std::list<item> &rhs);
 
-        static bool has_activation(const item &it, const player &u);
-        static bool has_capacity_for_liquid(const item &it, const item &liquid);
-
-        indexed_invslice slice_filter();  // unfiltered, but useful for a consistent interface.
-        indexed_invslice slice_filter_by_activation(const player &u);
-        indexed_invslice slice_filter_by_capacity_for_liquid(const item &liquid);
-        indexed_invslice slice_filter_by_flag(const std::string flag);
-        indexed_invslice slice_filter_by_salvageability(const salvage_actor &actor);
-
         void unsort(); // flags the inventory as unsorted
         void sort();
         void clear();
@@ -114,7 +107,7 @@ class inventory : public visitable<inventory>
         /**
          * Randomly select items until the volume quota is filled.
          */
-        std::list<item> remove_randomly_by_volume(int volume);
+        std::list<item> remove_randomly_by_volume( const units::volume &volume );
         std::list<item> reduce_stack(int position, int quantity);
         std::list<item> reduce_stack(const itype_id &type, int quantity);
 
@@ -149,8 +142,6 @@ class inventory : public visitable<inventory>
         bool has_components (itype_id it, int quantity) const;
         bool has_charges(itype_id it, long quantity) const;
 
-        static int num_items_at_position( int position );
-
         int leak_level(std::string flag) const; // level of leaked bad stuff from items
 
         // NPC/AI functions
@@ -163,7 +154,7 @@ class inventory : public visitable<inventory>
         void rust_iron_items();
 
         int weight() const;
-        int volume() const;
+        units::volume volume() const;
 
         void dump(std::vector<item *> &dest); // dumps contents into dest (does not delete contents)
 
@@ -182,22 +173,16 @@ class inventory : public visitable<inventory>
         // Assigns an invlet if any remain.  If none do, will assign ` if force is
         // true, empty (invlet = 0) otherwise.
         void assign_empty_invlet(item &it, bool force = false);
+        // Assigns the item with the given invlet, and updates the favourite invlet cache. Does not check for uniqueness
+        void reassign_item(item &it, char invlet);
 
         std::set<char> allocated_invlets() const;
 
-        template<typename T>
-        indexed_invslice slice_filter_by( T filter )
-        {
-            int i = 0;
-            indexed_invslice stacks;
-            for( auto &elem : items ) {
-                if( filter( elem.front() ) ) {
-                    stacks.push_back( std::make_pair( &elem, i ) );
-                }
-                ++i;
-            }
-            return stacks;
-        }
+        /**
+         * Returns visitable items binned by their itype.
+         * May not contain items that wouldn't be visited by @ref visitable methods.
+         */
+        const itype_bin &get_binned_items() const;
 
     private:
         // For each item ID, store a set of "favorite" inventory letters.
@@ -212,6 +197,14 @@ class inventory : public visitable<inventory>
 
         invstack items;
         bool sorted;
+
+        mutable bool binned;
+        /**
+         * Items binned by their type.
+         * That is, item_bin["carrot"] is a list of pointers to all carrots in inventory.
+         * `mutable` because this is a pure cache that doesn't affect the contained items.
+         */
+        mutable itype_bin binned_items;
 };
 
 #endif

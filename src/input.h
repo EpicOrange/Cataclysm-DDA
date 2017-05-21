@@ -1,3 +1,4 @@
+#pragma once
 #ifndef INPUT_H
 #define INPUT_H
 
@@ -195,6 +196,13 @@ class input_manager
          * Defined in the respective platform wrapper, e.g. sdlcurse.cpp
          */
         input_event get_input_event( WINDOW *win );
+        input_event get_input_event();
+
+        /**
+         * Wait until the user presses a key. Mouse and similar input is ignored,
+         * only input events from the keyboard are considered.
+         */
+        void wait_for_any_key();
 
         bool translate_to_window_position();
 
@@ -205,6 +213,12 @@ class input_manager
          * events to be generated correctly.
          */
         void set_timeout( int delay );
+        void reset_timeout() {
+            set_timeout( -1 );
+        }
+        int get_timeout() const {
+            return input_timeout;
+        }
 
     private:
         friend class input_context;
@@ -360,7 +374,7 @@ class input_context
          *                  0 indicates no limit.
          */
         const std::string get_desc( const std::string &action_descriptor,
-                                    const unsigned int max_limit = 0 );
+                                    const unsigned int max_limit = 0 ) const;
 
         /**
          * Handles input and returns the next action in the queue.
@@ -375,6 +389,7 @@ class input_context
          *
          */
         const std::string &handle_input();
+        const std::string &handle_input( int timeout );
 
         /**
          * Convert a direction action(UP, DOWN etc) to a delta x and y.
@@ -448,7 +463,7 @@ class input_context
 
         std::vector<std::string> registered_actions;
     public:
-        const std::string &input_to_action( input_event &inp );
+        const std::string &input_to_action( const input_event &inp ) const;
     private:
         bool registered_any_input;
         std::string category; // The input category this context uses.
@@ -483,6 +498,15 @@ class input_context
          * keybindings.
          */
         void clear_conflicting_keybindings( const input_event &event );
+        /**
+         * Filter a vector of strings by a phrase, returning only strings that contain the phrase.
+         *
+         * @param strings The vector of strings to filter
+         * @param phrase  The phrase to search within each of the given strings
+         * @return A vector of the filtered strings
+         */
+        std::vector<std::string> filter_strings_by_phrase( const std::vector<std::string> &strings,
+                const std::string &phrase ) const;
 };
 
 /**

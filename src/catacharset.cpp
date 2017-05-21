@@ -3,6 +3,7 @@
 #include "debug.h"
 #include "cursesdef.h"
 #include "wcwidth.h"
+#include "options.h"
 
 //copied from SDL2_ttf code
 //except type changed from unsigned to uint32_t
@@ -288,7 +289,7 @@ std::string utf8_truncate(std::string s, size_t length)
     return s.substr(0, last_pos);
 }
 
-static const char base64_encoding_table[] = {
+static const std::array<char, 64> base64_encoding_table = {{
     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
     'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
     'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
@@ -297,10 +298,10 @@ static const char base64_encoding_table[] = {
     'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
     'w', 'x', 'y', 'z', '0', '1', '2', '3',
     '4', '5', '6', '7', '8', '9', '+', '-'
-};
+}};
 
-static char base64_decoding_table[256];
-static const  int mod_table[] = {0, 2, 1};
+static       std::array<char, 256> base64_decoding_table;
+static const std::array<int, 3> mod_table = {{0, 2, 1}};
 
 static void build_base64_decoding_table()
 {
@@ -323,7 +324,7 @@ std::string base64_encode(std::string str)
     int input_length = str.length();
     int output_length = 4 * ((input_length + 2) / 3);
 
-    char *encoded_data = new char[output_length + 1];
+    std::string encoded_data( output_length, '\0' );
     const unsigned char *data = (const unsigned char *)str.c_str();
 
     for (int i = 0, j = 0; i < input_length;) {
@@ -344,12 +345,7 @@ std::string base64_encode(std::string str)
         encoded_data[output_length - 1 - i] = '=';
     }
 
-    encoded_data[output_length] = '\0';
-    std::string ret = "#";
-    ret += encoded_data;
-    delete[] encoded_data;
-
-    return ret;
+    return "#" + encoded_data;
 }
 
 
@@ -380,7 +376,7 @@ std::string base64_decode(std::string str)
         output_length--;
     }
 
-    unsigned char *decoded_data = new unsigned char[output_length + 1];
+    std::string decoded_data( output_length, '\0' );
 
     for (int i = 0, j = 0; i < input_length;) {
 
@@ -405,12 +401,95 @@ std::string base64_decode(std::string str)
         }
     }
 
-    decoded_data[output_length] = 0;
+    return decoded_data;
+}
 
-    std::string ret = (char *)decoded_data;
-    delete[] decoded_data;
+inline void strip_trailing_nulls( std::wstring &str )
+{
+    while( !str.empty() && str.back() == '\0' ) {
+        str.pop_back();
+    }
+}
 
-    return ret;
+inline void strip_trailing_nulls( std::string &str )
+{
+    while( !str.empty() && str.back() == '\0' ) {
+        str.pop_back();
+    }
+}
+
+std::wstring utf8_to_wstr( const std::string &str )
+{
+#if defined(_WIN32) || defined(WINDOWS)
+    int sz = MultiByteToWideChar( CP_UTF8, 0, str.c_str(), -1, NULL, 0 ) + 1;
+    std::wstring wstr( sz, '\0' );
+    MultiByteToWideChar( CP_UTF8, 0, str.c_str(), -1, &wstr[0], sz );
+    strip_trailing_nulls( wstr );
+    return wstr;
+#else
+    std::size_t sz = std::mbstowcs( NULL, str.c_str(), str.size() );
+    std::wstring wstr( sz, '\0' );
+    std::mbstowcs( &wstr[0], str.c_str(), sz );
+    strip_trailing_nulls( wstr );
+    return wstr;
+#endif
+}
+
+std::string wstr_to_utf8( const std::wstring &wstr )
+{
+#if defined(_WIN32) || defined(WINDOWS)
+    int sz = WideCharToMultiByte( CP_UTF8, 0, wstr.c_str(), -1, NULL, 0, NULL, NULL );
+    std::string str( sz, '\0' );
+    WideCharToMultiByte( CP_UTF8, 0, wstr.c_str(), -1, &str[0], sz, NULL, NULL );
+    strip_trailing_nulls( str );
+    return str;
+#else
+    std::size_t sz = std::wcstombs( NULL, wstr.c_str(), wstr.size() );
+    std::string str( sz, '\0' );
+    std::wcstombs( &str[0], wstr.c_str(), sz );
+    strip_trailing_nulls( str );
+    return str;
+#endif
+}
+
+std::string native_to_utf8( const std::string &str )
+{
+    if( get_options().has_option( "ENCODING_CONV" ) && !get_option<bool>( "ENCODING_CONV" ) ) {
+        return str;
+    }
+#if defined(_WIN32) || defined(WINDOWS)
+    // native encoded string --> Unicode sequence --> UTF-8 string
+    int unicode_size = MultiByteToWideChar( CP_ACP, 0, str.c_str(), -1, NULL, 0 ) + 1;
+    std::wstring unicode( unicode_size, '\0' );
+    MultiByteToWideChar( CP_ACP, 0, str.c_str(), -1, &unicode[0], unicode_size );
+    int utf8_size = WideCharToMultiByte( CP_UTF8, 0, &unicode[0], -1, NULL, 0, NULL, 0 ) + 1;
+    std::string result( utf8_size, '\0' );
+    WideCharToMultiByte( CP_UTF8, 0, &unicode[0], -1, &result[0], utf8_size, NULL, 0 );
+    strip_trailing_nulls( result );
+    return result;
+#else
+    return str;
+#endif
+}
+
+std::string utf8_to_native( const std::string &str )
+{
+    if( get_options().has_option( "ENCODING_CONV" ) && !get_option<bool>( "ENCODING_CONV" ) ) {
+        return str;
+    }
+#if defined(_WIN32) || defined(WINDOWS)
+    // UTF-8 string --> Unicode sequence --> native encoded string
+    int unicode_size = MultiByteToWideChar( CP_UTF8, 0, str.c_str(), -1, NULL, 0 ) + 1;
+    std::wstring unicode( unicode_size, '\0' );
+    MultiByteToWideChar( CP_UTF8, 0, str.c_str(), -1, &unicode[0], unicode_size );
+    int native_size = WideCharToMultiByte( CP_ACP, 0, &unicode[0], -1, NULL, 0, NULL, 0 ) + 1;
+    std::string result( native_size, '\0' );
+    WideCharToMultiByte( CP_ACP, 0, &unicode[0], -1, &result[0], native_size, NULL, 0 );
+    strip_trailing_nulls( result );
+    return result;
+#else
+    return str;
+#endif
 }
 
 int center_text_pos(const char *text, int start_pos, int end_pos)

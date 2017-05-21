@@ -1,3 +1,4 @@
+#pragma once
 #ifndef PLDATA_H
 #define PLDATA_H
 
@@ -102,7 +103,5 @@ struct mutation_category_trait {
 };
 
 extern std::map<std::string, mutation_category_trait> mutation_category_traits;
-
-bool trait_display_sort( const std::string &a, const std::string &b ) noexcept;
 
 #endif

@@ -1,3 +1,4 @@
+#pragma once
 #ifndef EFFECT_H
 #define EFFECT_H
 
@@ -13,6 +14,8 @@ class Creature;
 class player;
 enum game_message_type : int;
 using efftype_id = string_id<effect_type>;
+struct mutation_branch;
+using trait_id = string_id<mutation_branch>;
 
 /** Handles the large variety of weed messages. */
 void weed_msg(player *p);
@@ -83,7 +86,7 @@ class effect_type
 
         bool main_parts_only;
 
-        std::vector<std::string> resist_traits;
+        std::vector<trait_id> resist_traits;
         std::vector<efftype_id> resist_effects;
         std::vector<efftype_id> removes_effects;
         std::vector<efftype_id> blocks_effects;
@@ -96,6 +99,9 @@ class effect_type
         // TODO: Once addictions are JSON-ized it should be trivial to convert this to a
         // "generic" addiction reduces value
         bool pkill_addict_reduces;
+        // This flag is hardcoded for specific IDs now
+        // It needs to be set for monster::move_effects
+        bool impairs_movement;
 
         std::vector<std::string> name;
         std::string speed_mod_name;
@@ -157,11 +163,11 @@ class effect : public JsonSerializer, public JsonDeserializer
         /** Returns the maximum duration of an effect. */
         int get_max_duration() const;
         /** Sets the duration, capping at max_duration if it exists. */
-        void set_duration( int dur );
+        void set_duration( int dur, bool alert = false );
         /** Mods the duration, capping at max_duration if it exists. */
-        void mod_duration( int dur );
+        void mod_duration( int dur, bool alert = false );
         /** Multiplies the duration, capping at max_duration if it exists. */
-        void mult_duration( double dur );
+        void mult_duration( double dur, bool alert = false );
 
         /** Returns the turn the effect was applied. */
         int get_start_turn() const;
@@ -182,13 +188,25 @@ class effect : public JsonSerializer, public JsonDeserializer
         int get_intensity() const;
         /** Returns the maximum intensity of an effect. */
         int get_max_intensity() const;
-        /** Sets an effect's intensity, capping at max_intensity. */
-        void set_intensity( int nintensity );
-        /** Mods an effect's intensity, capping at max_intensity. */
-        void mod_intensity( int nintensity );
+
+        /**
+         * Sets inensity of effect capped by range [1..max_intensity]
+         * @param val Value to set intensity to
+         * @param alert whether decay messages should be displayed
+         * @return new intensity of the effect after val subjected to above cap
+         */
+        int set_intensity( int val, bool alert = false );
+
+        /**
+         * Modify inensity of effect capped by range [1..max_intensity]
+         * @param mod Amount to increase current intensity by
+         * @param alert whether decay messages should be displayed
+         * @return new intensity of the effect after modification and capping
+         */
+        int mod_intensity( int mod, bool alert = false );
 
         /** Returns the string id of the resist trait to be used in has_trait("id"). */
-        const std::vector<std::string> &get_resist_traits() const;
+        const std::vector<trait_id> &get_resist_traits() const;
         /** Returns the string id of the resist effect to be used in has_effect("id"). */
         const std::vector<efftype_id> &get_resist_effects() const;
         /** Returns the string ids of the effects removed by this effect to be used in remove_effect("id"). */
@@ -216,7 +234,7 @@ class effect : public JsonSerializer, public JsonDeserializer
                         bool reduced = false, double mod = 1 ) const;
 
         /** Returns the modifier caused by addictions. Currently only handles painkiller addictions. */
-        double get_addict_mod( std::string arg, int addict_level ) const;
+        double get_addict_mod( const std::string &arg, int addict_level ) const;
         /** Returns true if the coughs caused by an effect can harm the player directly. */
         bool get_harmful_cough() const;
         /** Returns the percentage value by further applications of existing effects' duration is multiplied by. */
@@ -231,6 +249,9 @@ class effect : public JsonSerializer, public JsonDeserializer
 
         /** Returns the value used for display on the speed modifier window in the player status menu. */
         std::string get_speed_name() const;
+
+        /** Returns if the effect is supposed to be handed in Creature::movement */
+        bool impairs_movement() const;
 
         /** Returns the effect's matching effect_type id. */
         const efftype_id &get_id() const {

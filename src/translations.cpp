@@ -1,19 +1,18 @@
+#if defined(LOCALIZE) && defined(__STRICT_ANSI__)
+#undef __STRICT_ANSI__ // _putenv in minGW need that
+#include <stdlib.h>
+#define __STRICT_ANSI__
+#endif
+
 #include "translations.h"
 
 #include <string>
+
 #ifdef LOCALIZE
-#undef __STRICT_ANSI__ // _putenv in minGW need that
 #include <stdlib.h> // for getenv()/setenv()/putenv()
 #include "options.h"
 #include "path_info.h"
 #include "debug.h"
-#else // !LOCALIZE
-#include <cstring> // strcmp
-#include <map>
-#endif // LOCALIZE
-
-
-#ifdef LOCALIZE
 
 const char *pgettext( const char *context, const char *msgid )
 {
@@ -33,10 +32,23 @@ const char *pgettext( const char *context, const char *msgid )
     }
 }
 
-void set_language( bool reload_options )
+const char *npgettext( const char *const context, const char *const msgid,
+                       const char *const msgid_plural, const unsigned long int n )
+{
+    const std::string context_id = std::string( context ) + '\004' + msgid;
+    const char *const msg_ctxt_id = context_id.c_str();
+    const char *const translation = dcngettext( nullptr, msg_ctxt_id, msgid_plural, n, LC_MESSAGES );
+    if( translation == msg_ctxt_id ) {
+        return n == 1 ? msgid : msgid_plural;
+    } else {
+        return translation;
+    }
+}
+
+void set_language()
 {
     // Step 1. Setup locale settings.
-    std::string lang_opt = OPTIONS["USE_LANG"].getValue();
+    std::string lang_opt = get_option<std::string>( "USE_LANG" );
     if( lang_opt != "" ) { // Not 'System Language'
         // Overwrite all system locale settings. Use CDDA settings. User wants this.
 #if (defined _WIN32 || defined WINDOWS)
@@ -83,42 +95,42 @@ void set_language( bool reload_options )
     textdomain( "cataclysm-dda" );
 
     // Step 3. Reload options strings with right language
-    if( reload_options ) {
-        get_options().init();
-        get_options().load();
-    }
+    get_options().init();
+    get_options().load();
 }
+
 #else // !LOCALIZE
-void set_language( bool reload_options )
+
+#include <cstring> // strcmp
+#include <map>
+
+void set_language()
 {
-    ( void ) reload_options; // Cancels MinGW warning on Windows
+    return;
 }
 
 // sanitized message cache
-std::map<const char *, std::string> &sanitized_messages()
+std::map<std::string, std::string> &sanitized_messages()
 {
-    static std::map<const char *, std::string> sanitized_messages;
+    static std::map<std::string, std::string> sanitized_messages;
     return sanitized_messages;
 }
 
 const char *strip_positional_formatting( const char *msgid )
 {
     // first check if we have it cached
-    if( sanitized_messages().find( msgid ) != sanitized_messages().end() ) {
-        if( sanitized_messages()[msgid] == "" ) {
-            return msgid;
-        } else {
-            return sanitized_messages()[msgid].c_str();
-        }
-    }
     std::string s( msgid );
+    auto iter = sanitized_messages().find( s );
+    if( iter != sanitized_messages().end() ) {
+        return iter->second.c_str();
+    }
+
     // basic usage is just to change all "%{number}$" to "%".
     // thus for example "%2$s" will change to simply "%s".
     // strings must have their parameters in strict order,
     // or else this will not work correctly.
     size_t pos = 0;
     size_t len = s.length();
-    bool changed = false;
     while( pos < len ) {
         pos = s.find( '%', pos );
         if( pos == std::string::npos || pos + 2 >= len ) {
@@ -137,18 +149,12 @@ const char *strip_positional_formatting( const char *msgid )
         }
         s.erase( pos + 1, dollarpos - pos );
         len = s.length(); // because it ain't da same no more
-        changed = true;
         ++pos;
     }
 
-    if( !changed ) {
-        sanitized_messages()[msgid] = "";
-        return msgid;
-    } else {
-        sanitized_messages()[msgid] = s;
-        return sanitized_messages()[msgid].c_str();
-    }
-    return msgid;
+    std::string &ret_msg = sanitized_messages()[std::string( msgid )];
+    ret_msg = s;
+    return ret_msg.c_str();
 }
 
 #endif // LOCALIZE

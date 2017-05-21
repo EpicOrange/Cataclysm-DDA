@@ -11,7 +11,7 @@ const species_id MOLLUSK( "MOLLUSK" );
 
 mtype::mtype()
 {
-    id = NULL_ID;
+    id = mtype_id::NULL_ID();
     name = "human";
     name_plural = "humans";
     description = "";
@@ -20,30 +20,17 @@ mtype::mtype()
     size = MS_MEDIUM;
     mat = { material_id( "flesh" ) };
     phase = SOLID;
-    difficulty = 0;
-    agro = 0;
-    morale = 0;
-    speed = 0;
-    attack_cost = 100;
-    melee_skill = 0;
-    melee_dice = 0;
-    melee_sides = 0;
-    sk_dodge = 0;
-    armor_bash = 0;
-    armor_cut = 0;
-    armor_stab = 0;
-    armor_acid = 0;
-    armor_fire = 0;
-    hp = 0;
     def_chance = 0;
     upgrades = false;
     half_life = -1;
-    upgrade_into = NULL_ID;
-    upgrade_group = NULL_ID;
-    burn_into = NULL_ID;
+    upgrade_into = mtype_id::NULL_ID();
+    upgrade_group = mongroup_id::NULL_ID();
+    burn_into = mtype_id::NULL_ID();
     dies.push_back( &mdeath::normal );
     sp_defense = nullptr;
+    harvest = harvest_id::NULL_ID();
     luminance = 0;
+    bash_skill = 0;
     flags.insert( MF_HUMAN );
     flags.insert( MF_BONES );
     flags.insert( MF_LEATHER );
@@ -176,6 +163,8 @@ itype_id mtype::get_meat_itype() const
             return "meat_tainted";
         } else if( made_of( material_id( "veggy" ) ) ) {
             return "veggy_tainted";
+        } else if( made_of( material_id( "bone" ) ) ) {
+            return "bone_tainted";
         }
     } else {
         if( made_of( material_id( "flesh" ) ) || made_of( material_id( "hflesh" ) ) ) {
@@ -186,53 +175,35 @@ itype_id mtype::get_meat_itype() const
             } else {
                 return "meat";
             }
-        } else if( made_of( material_id( "bone" ) ) ) {
-            return "bone_tainted";
         } else if( made_of( material_id( "iflesh" ) ) ) {
             //In the future, insects could drop insect flesh rather than plain ol' meat.
             return "meat";
         } else if( made_of( material_id( "veggy" ) ) ) {
             return "veggy";
+        } else if( made_of( material_id( "bone" ) ) ) {
+            return "bone";
         }
     }
     return "null";
 }
 
-bool mtype_special_attack::call( monster &mon ) const
+int mtype::get_meat_chunks_count() const
 {
-    if( function_type == ATTACK_CPP ) {
-        return cpp_function( &mon );
-    } else if( function_type == ATTACK_ACTOR_PTR ) {
-        return actor_ptr->call( mon );
+    switch( size ) {
+        case MS_TINY:
+            return 1;
+        case MS_SMALL:
+            return 2;
+        case MS_MEDIUM:
+            return 4;
+        case MS_LARGE:
+            return 8;
+        case MS_HUGE:
+            return 16;
     }
-
-    return false;
+    return 0;
 }
 
 mtype_special_attack::~mtype_special_attack()
 {
-    if( function_type == ATTACK_ACTOR_PTR ) {
-        delete actor_ptr;
-    }
-}
-
-mtype_special_attack::mtype_special_attack( const mtype_special_attack &other )
-    : function_type( other.function_type ), cooldown( other.cooldown )
-{
-    if( function_type == ATTACK_CPP ) {
-        cpp_function = other.cpp_function;
-    } else if( function_type == ATTACK_ACTOR_PTR ) {
-        actor_ptr = other.actor_ptr->clone();
-    }
-}
-
-void mtype_special_attack::operator=( const mtype_special_attack &other )
-{
-    this->~mtype_special_attack();
-    new( this ) mtype_special_attack( other );
-}
-
-void mtype_special_attack::set_cooldown( int i )
-{
-    cooldown = i;
 }

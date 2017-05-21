@@ -1,3 +1,4 @@
+#pragma once
 #ifndef NPC_FAVOR_H
 #define NPC_FAVOR_H
 
@@ -22,7 +23,7 @@ struct npc_favor : public JsonSerializer, public JsonDeserializer {
         type = FAVOR_NULL;
         value = 0;
         item_id = "null";
-        skill = skill_id( NULL_ID );
+        skill = skill_id::NULL_ID();
     };
 
     using JsonSerializer::serialize;

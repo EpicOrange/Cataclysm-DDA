@@ -50,7 +50,10 @@
     "damage": 5,
     "range": 4,
     "pierce": 5,
-    "effects": [ "FLAME", "STREAM", "INCENDIARY", "NEVER_MISFIRES" ]
+    "effects": [ "FLAME", "STREAM", "INCENDIARY", "NEVER_MISFIRES" ],
+    "fuel": {
+      "energy": 35.8
+    }
   },
   {
     "id": "gasoline",
@@ -70,11 +73,14 @@
     "material": "hydrocarbons",
     "symbol": "=",
     "color": "light_red",
-    "ammo_type": "gasoline",
+    "ammo_type": [ "gasoline", "flammable" ],
     "damage": 5,
     "range": 4,
     "pierce": 5,
-    "effects": [ "FLAME", "STREAM", "INCENDIARY", "NEVER_MISFIRES" ]
+    "effects": [ "FLAME", "STREAM", "INCENDIARY", "NEVER_MISFIRES" ],
+    "fuel": {
+      "energy": 34.2
+    }
   },
   {
     "id": "lamp_oil",
@@ -117,7 +123,7 @@
     "material": "hydrocarbons",
     "symbol": "=",
     "color": "light_red",
-    "ammo_type": "gasoline",
+    "ammo_type": "flammable",
     "damage": 15,
     "range": 5,
     "pierce": 30,

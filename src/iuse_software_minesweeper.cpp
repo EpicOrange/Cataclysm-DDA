@@ -1,11 +1,4 @@
-#include <string>
-#include <iostream>
-#include <iterator>
-#include <sstream>
-#include <fstream>
-#include <map>
-#include <vector>
-#include <cstdlib>
+#include "iuse_software_minesweeper.h"
 
 #include "output.h"
 #include "ui.h"
@@ -13,8 +6,13 @@
 #include "map.h"
 #include "input.h"
 #include "catacharset.h"
-#include "iuse_software_minesweeper.h"
 #include "translations.h"
+#include "string_input_popup.h"
+
+#include <string>
+#include <sstream>
+#include <vector>
+#include <cstdlib>
 
 minesweeper_game::minesweeper_game()
 {
@@ -39,7 +37,7 @@ void minesweeper_game::new_level(WINDOW *w_minesweeper)
     mLevelReveal.clear();
 
     auto set_num = [&](const std::string sType, int &iVal, const int iMin, const int iMax) {
-        std::stringstream ssTemp;
+        std::ostringstream ssTemp;
         ssTemp << _("Min:") << iMin << " " << _("Max:") << " " << iMax;
 
         do {
@@ -47,7 +45,11 @@ void minesweeper_game::new_level(WINDOW *w_minesweeper)
                 iVal = iMin;
             }
 
-            iVal = std::atoi(string_input_popup(sType.c_str(), 5, to_string(iVal), ssTemp.str().c_str(), "", -1, true).c_str());
+            string_input_popup()
+            .title( sType )
+            .width( 5 )
+            .description( ssTemp.str() )
+            .edit( iVal );
         } while( iVal < iMin || iVal > iMax);
     };
 

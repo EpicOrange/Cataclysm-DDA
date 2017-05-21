@@ -1,8 +1,11 @@
+#pragma once
 #ifndef OVERMAPBUFFER_H
 #define OVERMAPBUFFER_H
 
 #include "enums.h"
+#include "int_id.h"
 #include "overmap_types.h"
+
 #include <set>
 #include <list>
 #include <memory>
@@ -13,7 +16,10 @@ struct mongroup;
 class monster;
 class npc;
 struct om_vehicle;
-struct oter_id;
+
+struct oter_t;
+using oter_id = int_id<oter_t>;
+
 class overmap;
 struct radio_tower;
 struct regional_settings;
@@ -84,7 +90,6 @@ public:
     void toggle_explored(int x, int y, int z);
     bool seen(int x, int y, int z);
     void set_seen(int x, int y, int z, bool seen = true);
-    bool has_npc(int x, int y, int z);
     bool has_vehicle( int x, int y, int z );
     bool has_horde(int x, int y, int z);
     std::vector<om_vehicle> get_vehicle( int x, int y, int z );
@@ -139,13 +144,18 @@ public:
      * Get all npcs in a area with given radius around (x, y).
      * Only npcs on the given z-level are considered.
      * Uses square_dist for distance calculation.
-     * x,y are submap coordinates.
-     * @radius Maximal distance of npc from (x,y). If the npc
+     * @param x,y,z are submap coordinates.
+     * @param radius Maximal distance of npc from (x,y). If the npc
      * is at most this far away from (x,y) it will be returned.
      * A radius of 0 returns only those npcs that are on the
      * specifc submap.
      */
     std::vector<npc*> get_npcs_near(int x, int y, int z, int radius);
+        /**
+         * Get all (currently loaded!) npcs that have a companion
+         * mission set.
+         */
+        std::vector<npc *> get_companion_mission_npcs();
     /**
      * Uses overmap terrain coords, this also means radius is
      * in overmap terrain.
@@ -183,6 +193,8 @@ public:
      * The function only searches on the z-level indicated by
      * origin.
      * This function may greate a new overmap if needed.
+     * @param origin Location of search
+     * @param type Terrain type to serch for
      * @param dist The maximum search distance.
      * If 0, OMAPX is used.
      * @param must_be_seen If true, only terrain seen by the player
@@ -192,19 +204,37 @@ public:
         int dist, bool must_be_seen);
 
     /**
+     * Returns a random point of specific terrain type among those found in certain search radius.
+     * This function may create new overmaps if needed.
+     * @param type Type of terrain to search for
+     * @param dist The maximal radius of the area to search for the desired terrain.
+     * A value of 0 will search an area equal to 4 entire overmaps.
+     * @returns If no matching tile can be found @ref overmap::invalid_tripoint is returned.
+     * @param origin uses overmap terrain coordinates.
+     * @param must_be_seen If true, only terrain seen by the player
+     * should be searched.
+     */
+    tripoint find_random(const tripoint& origin, const std::string& type,
+        int dist, bool must_be_seen);
+
+    /**
      * Mark a square area around center on z-level z
      * as seen.
-     * center is in absolute overmap terrain coords.
+     * @param center is in absolute overmap terrain coords.
      * @param radius The half size of the square to make visible.
      * A value of 0 makes only center visible, radius 1 makes a
      * square 3x3 visible.
+     * @param z Z level to make area on
      * @return true if something has actually been revealed.
      */
     bool reveal(const point &center, int radius, int z);
     bool reveal( const tripoint &center, int radius );
+
+    bool reveal_route( const tripoint &source, const tripoint &dest, int radius = 0, bool road_only = false );
     /**
      * Returns the closest point of terrain type.
      * This function may create new overmaps if needed.
+     * @param type Type of terrain to look for
      * @param radius The maximal radius of the area to search for the desired terrain.
      * A value of 0 will search an area equal to 4 entire overmaps.
      * @returns If no matching tile can be found @ref overmap::invalid_tripoint is returned.
@@ -334,6 +364,10 @@ private:
      * groups to the correct overmap (if it exists), also removes empty groups.
      */
     void fix_mongroups(overmap &new_overmap);
+    /**
+     * Moves out-of-bounds NPCs to the overmaps they should be in.
+     */
+    void fix_npcs( overmap &new_overmap );
     /**
      * Retrieve overmaps that overlap the bounding box defined by the location and radius.
      * The location is in absolute submap coordinates, the radius is in the same system.

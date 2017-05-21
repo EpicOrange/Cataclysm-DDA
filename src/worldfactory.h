@@ -1,9 +1,11 @@
+#pragma once
 #ifndef WORLDFACTORY_H
 #define WORLDFACTORY_H
 
-#include "options.h"
-#include "output.h"
+#include "cursesdef.h"
 #include "enums.h"
+#include "json.h"
+#include "options.h"
 
 #include <functional>
 #include <map>
@@ -11,12 +13,38 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <iosfwd>
+
+class JsonIn;
+
+class save_t
+{
+    private:
+        std::string name;
+
+        save_t( const std::string &name );
+
+    public:
+        std::string player_name() const;
+        std::string base_path() const;
+
+        static save_t from_player_name( const std::string &name );
+        static save_t from_base_path( const std::string &base_path );
+
+        bool operator==( const save_t &rhs ) const {
+            return name == rhs.name;
+        }
+        bool operator!=( const save_t &rhs ) const {
+            return !operator==( rhs );
+        }
+        save_t &operator=( const save_t & ) = default;
+};
 
 struct WORLD {
     std::string world_path;
     std::string world_name;
     std::unordered_map<std::string, options_manager::cOpt> WORLD_OPTIONS;
-    std::vector<std::string> world_saves;
+    std::vector<save_t> world_saves;
     /**
      * A (possibly empty) list of (idents of) mods that
      * should be loaded for this world.
@@ -25,8 +53,11 @@ struct WORLD {
 
     WORLD();
 
-    bool save_exists( const std::string &name ) const;
-    void add_save( const std::string &name );
+    bool save_exists( const save_t &name ) const;
+    void add_save( const save_t &name );
+
+    void load_options( JsonIn &jsin );
+    void load_legacy_options( std::istream &fin );
 };
 
 class mod_manager;
@@ -46,6 +77,8 @@ class worldfactory
         // Generate a world
         WORLDPTR make_new_world( bool show_prompt = true );
         WORLDPTR make_new_world( special_game_id special_type );
+        // Used for unit tests - does NOT verify if the mods can be loaded
+        WORLDPTR make_new_world( const std::vector<std::string> &mods );
         WORLDPTR convert_to_world( std::string origin_path );
 
         void set_active_world( WORLDPTR world );
@@ -64,10 +97,11 @@ class worldfactory
         void remove_world( std::string worldname );
         bool valid_worldname( std::string name, bool automated = false );
 
-        /** World need CDDA build with Lua support
-         * @param World name to test
+        /**
+         * World need CDDA build with Lua support
+         * @param world_name World name to test
          * @return True if world can't be loaded without Lua support. False otherwise. (When LUA is defined it's allways false).
-        */
+         */
         bool world_need_lua_build( std::string world_name );
     protected:
     private:
@@ -81,8 +115,9 @@ class worldfactory
         void draw_mod_list( WINDOW *w, int &start, int &cursor, const std::vector<std::string> &mods,
                             bool is_active_list, const std::string &text_if_empty, WINDOW *w_shift );
 
-        void get_default_world_options( WORLDPTR &world );
         bool load_world_options( WORLDPTR &world );
+
+        WORLDPTR add_world( WORLDPTR world );
 
         std::unique_ptr<mod_manager> mman;
         std::unique_ptr<mod_ui> mman_ui;
@@ -93,6 +128,8 @@ class worldfactory
         std::vector<std::string> tab_strings;
 };
 
-extern worldfactory *world_generator;
+void load_world_option( JsonObject &jo );
+
+extern std::unique_ptr<worldfactory> world_generator;
 
 #endif

@@ -5,7 +5,7 @@
 
 #include "output.h"
 
-#define SGN(a) (((a)<0) ? -1 : 1)
+#define SGN(a) (((a)<0) ? -1 : (((a)>0) ? 1 : 0))
 
 void bresenham( const int x1, const int y1, const int x2, const int y2, int t,
                 const std::function<bool(const point &)> &interact )
@@ -314,21 +314,12 @@ unsigned make_xyz(int const x, int const y, int const z)
    }
 }
 
-// returns normalized dx and dy for the current line vector.
-std::pair<double, double> slope_of(const std::vector<point> &line)
-{
-    const double len = line.size();
-    double normDx = (line.back().x - line.front().x) / len;
-    double normDy = (line.back().y - line.front().y) / len;
-    std::pair<double, double> ret = std::make_pair(normDx, normDy); // slope of x, y
-    return ret;
-}
-
 // returns the normalized dx, dy, dz for the current line vector.
 // ret.second contains z and can be ignored if unused.
 std::pair<std::pair<double, double>, double> slope_of(const std::vector<tripoint> &line)
 {
-    const double len = line.size();
+    assert(!line.empty() && line.front() != line.back());
+    const double len = trig_dist(line.front(), line.back());
     double normDx = (line.back().x - line.front().x) / len;
     double normDy = (line.back().y - line.front().y) / len;
     double normDz = (line.back().z - line.front().z) / len;
@@ -351,29 +342,21 @@ float get_normalized_angle( const point &start, const point &end )
     return min / max;
 }
 
-std::vector<point> continue_line(const std::vector<point> &line, const int distance)
+tripoint move_along_line( const tripoint &loc, const std::vector<tripoint> &line, const int distance )
 {
-    const point start = line.back();
-    point end = line.back();
-    const std::pair<double, double> slope = slope_of(line);
-    end.x += distance * slope.first;
-    end.y += distance * slope.second;
-    return line_to( start, end, 0 );
+    // May want to optimize this, but it's called fairly infrequently as part of specific attack
+    // routines, erring on the side of readability.
+    tripoint res( loc );
+    const auto slope = slope_of( line );
+    res.x += distance * slope.first.first;
+    res.y += distance * slope.first.second;
+    res.z += distance * slope.second;
+    return res;
 }
 
 std::vector<tripoint> continue_line(const std::vector<tripoint> &line, const int distance)
 {
-    // May want to optimize this, but it's called fairly infrequently as part of specific attack
-    // routines, erring on the side of readability.
-    tripoint start( line.back() );
-    tripoint end( line.back() );
-    // slope <<x,y>,z>
-    std::pair<std::pair<double, double>, double> slope;
-    slope = slope_of(line);
-    end.x += int(distance * slope.first.first);
-    end.y += int(distance * slope.first.second);
-    end.z += int(distance * slope.second);
-    return line_to(start, end, 0, 0);
+    return line_to( line.back(), move_along_line( line.back(), line, distance ) );
 }
 
 direction direction_from(int const x, int const y, int const z) noexcept
@@ -510,7 +493,7 @@ std::vector<tripoint> squares_closer_to( const tripoint &from, const tripoint &t
         if( dx != 0 ) {
             adjacent_closer_squares.push_back( { from.x + SGN(dx), from.y, from.z } );
         }
-    } else {
+    } else if( dx != 0 ) {
         // Pure diagonal.
         adjacent_closer_squares.push_back( { from.x + SGN(dx), from.y + SGN(dy), from.z } );
         adjacent_closer_squares.push_back( { from.x + SGN(dx), from.y, from.z } );

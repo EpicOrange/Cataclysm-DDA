@@ -1,3 +1,4 @@
+#pragma once
 #ifndef EDITMAP_H
 #define EDITMAP_H
 
@@ -112,7 +113,6 @@ class editmap
         int tmaxx;
         int tmaxy;
         bool uberdraw;
-        std::map<oter_id, int> oter_special;
 
         editmap();
         ~editmap();

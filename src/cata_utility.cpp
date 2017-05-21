@@ -9,68 +9,38 @@
 #include "debug.h"
 #include "mapsharing.h"
 #include "output.h"
+#include "json.h"
+#include "filesystem.h"
+#include "item_search.h"
+#include "rng.h"
 
 #include <algorithm>
+#include <cmath>
+#include <string>
+#include <locale>
+
+double round_up( double val, unsigned int dp )
+{
+    const double denominator = std::pow( 10.0, double( dp ) );
+    return std::ceil( denominator * val ) / denominator;
+}
 
 bool isBetween( int test, int down, int up )
 {
     return test > down && test < up;
 }
 
-bool lcmatch( const std::string &str, const std::string &findstr ); // ui.cpp
-bool list_items_match( const item *item, std::string sPattern )
+bool lcmatch( const std::string &str, const std::string &qry )
 {
-    size_t iPos;
-    bool hasExclude = false;
+    std::string needle;
+    needle.reserve( qry.size() );
+    std::transform( qry.begin(), qry.end(), std::back_inserter( needle ), tolower );
 
-    if( sPattern.find( "-" ) != std::string::npos ) {
-        hasExclude = true;
-    }
+    std::string haystack;
+    haystack.reserve( str.size() );
+    std::transform( str.begin(), str.end(), std::back_inserter( haystack ), tolower );
 
-    do {
-        iPos = sPattern.find( "," );
-        std::string pat = ( iPos == std::string::npos ) ? sPattern : sPattern.substr( 0, iPos );
-        bool exclude = false;
-        if( pat.substr( 0, 1 ) == "-" ) {
-            exclude = true;
-            pat = pat.substr( 1, pat.size() - 1 );
-        } else if( hasExclude ) {
-            hasExclude = false; //If there are non exclusive items to filter, we flip this back to false.
-        }
-
-        std::string namepat = pat;
-        std::transform( namepat.begin(), namepat.end(), namepat.begin(), tolower );
-        if( lcmatch( remove_color_tags( item->tname() ), namepat ) ) {
-            return !exclude;
-        }
-
-        if( pat.find( "{", 0 ) != std::string::npos ) {
-            std::string adv_pat_type = pat.substr( 1, pat.find( ":" ) - 1 );
-            std::string adv_pat_search = pat.substr( pat.find( ":" ) + 1,
-                                         ( pat.find( "}" ) - pat.find( ":" ) ) - 1 );
-            std::transform( adv_pat_search.begin(), adv_pat_search.end(), adv_pat_search.begin(), tolower );
-            if( adv_pat_type == "c" && lcmatch( item->get_category().name, adv_pat_search ) ) {
-                return !exclude;
-            } else if( adv_pat_type == "m" ) {
-                for( auto material : item->made_of_types() ) {
-                    if( lcmatch( material->name(), adv_pat_search ) ) {
-                        return !exclude;
-                    }
-                }
-            } else if( adv_pat_type == "dgt" && item->damage > atoi( adv_pat_search.c_str() ) ) {
-                return !exclude;
-            } else if( adv_pat_type == "dlt" && item->damage < atoi( adv_pat_search.c_str() ) ) {
-                return !exclude;
-            }
-        }
-
-        if( iPos != std::string::npos ) {
-            sPattern = sPattern.substr( iPos + 1, sPattern.size() );
-        }
-
-    } while( iPos != std::string::npos );
-
-    return hasExclude;
+    return haystack.find( needle ) != std::string::npos;
 }
 
 std::vector<map_item_stack> filter_item_stacks( std::vector<map_item_stack> stack,
@@ -79,12 +49,18 @@ std::vector<map_item_stack> filter_item_stacks( std::vector<map_item_stack> stac
     std::vector<map_item_stack> ret;
 
     std::string sFilterTemp = filter;
-
-    for( auto &elem : stack ) {
-        if( sFilterTemp == "" || list_items_match( elem.example, sFilterTemp ) ) {
-            ret.push_back( elem );
+    auto z = item_filter_from_string( filter );
+    std::copy_if( stack.begin(),
+                  stack.end(),
+                  std::back_inserter( ret ),
+    [z]( const map_item_stack & a ) {
+        if( a.example != nullptr ) {
+            return z( *a.example );
         }
+        return false;
     }
+                );
+
     return ret;
 }
 
@@ -93,8 +69,9 @@ int list_filter_high_priority( std::vector<map_item_stack> &stack, std::string p
 {
     //TODO:optimize if necessary
     std::vector<map_item_stack> tempstack; // temp
+    const auto filter_fn = item_filter_from_string( priorities );
     for( auto it = stack.begin(); it != stack.end(); ) {
-        if( priorities == "" || !list_items_match( it->example, priorities ) ) {
+        if( priorities.empty() || ( it->example != nullptr && !filter_fn( *it->example ) ) ) {
             tempstack.push_back( *it );
             it = stack.erase( it );
         } else {
@@ -114,8 +91,9 @@ int list_filter_low_priority( std::vector<map_item_stack> &stack, int start,
 {
     //TODO:optimize if necessary
     std::vector<map_item_stack> tempstack; // temp
+    const auto filter_fn = item_filter_from_string( priorities );
     for( auto it = stack.begin() + start; it != stack.end(); ) {
-        if( priorities != "" && list_items_match( it->example, priorities ) ) {
+        if( !priorities.empty() && it->example != nullptr && filter_fn( *it->example ) ) {
             tempstack.push_back( *it );
             it = stack.erase( it );
         } else {
@@ -130,50 +108,8 @@ int list_filter_low_priority( std::vector<map_item_stack> &stack, int start,
     return id;
 }
 
-/* used by calculate_drop_cost */
-bool compare_items_by_lesser_volume( const item &a, const item &b )
-{
-    return a.volume() < b.volume();
-}
-
-// calculate the time (in player::moves) it takes to drop the
-// items in dropped and dropped_worn.
-// Items in dropped come from the main inventory (or the wielded weapon)
-// Items in dropped_worn are cloth that had been worn.
-// All items in dropped that fit into the removed storage space
-// (freed_volume_capacity) do not take time to drop.
-// Example: dropping five 2x4 (volume 5*6) and a worn backpack
-// (storage 40) will take only the time for dropping the backpack
-// dropping two more 2x4 takes the time for dropping the backpack and
-// dropping the remaining 2x4 that does not fit into the backpack.
-int calculate_drop_cost( std::vector<item> &dropped, const std::vector<item> &dropped_worn,
-                         int freed_volume_capacity )
-{
-    // Prefer to put small items into the backpack
-    std::sort( dropped.begin(), dropped.end(), compare_items_by_lesser_volume );
-    int drop_item_cnt = dropped_worn.size();
-    int total_volume_dropped = 0;
-    for( auto &elem : dropped ) {
-        total_volume_dropped += elem.volume();
-        if( freed_volume_capacity == 0 || total_volume_dropped > freed_volume_capacity ) {
-            drop_item_cnt++;
-        }
-    }
-    return drop_item_cnt * 100;
-}
-
-bool compare_by_dist_attitude::operator()( Creature *a, Creature *b ) const
-{
-    const auto aa = u.attitude_to( *a );
-    const auto ab = u.attitude_to( *b );
-    if( aa != ab ) {
-        return aa < ab;
-    }
-    return rl_dist( a->pos(), u.pos() ) < rl_dist( b->pos(), u.pos() );
-}
-
 bool pair_greater_cmp::operator()( const std::pair<int, tripoint> &a,
-                                   const std::pair<int, tripoint> &b )
+                                   const std::pair<int, tripoint> &b ) const
 {
     return a.first > b.first;
 }
@@ -182,14 +118,11 @@ bool pair_greater_cmp::operator()( const std::pair<int, tripoint> &a,
 // This stuff could be moved elsewhere, but there
 // doesn't seem to be a good place to put it right now.
 
-// Basic logistic function.
 double logarithmic( double t )
 {
     return 1 / ( 1 + exp( -t ) );
 }
 
-// Logistic curve [-6,6], flipped and scaled to
-// range from 1 to 0 as pos goes from min to max.
 double logarithmic_range( int min, int max, int pos )
 {
     const double LOGI_CUTOFF = 4;
@@ -236,7 +169,7 @@ int bound_mod_to_vals( int val, int mod, int max, int min )
 
 const char *velocity_units( const units_type vel_units )
 {
-    if( OPTIONS["USE_METRIC_SPEEDS"].getValue() == "mph" ) {
+    if( get_option<std::string>( "USE_METRIC_SPEEDS" ) == "mph" ) {
         return _( "mph" );
     } else {
         switch( vel_units ) {
@@ -251,18 +184,39 @@ const char *velocity_units( const units_type vel_units )
 
 const char *weight_units()
 {
-    return OPTIONS["USE_METRIC_WEIGHTS"].getValue() == "lbs" ? _( "lbs" ) : _( "kg" );
+    return get_option<std::string>( "USE_METRIC_WEIGHTS" ) == "lbs" ? _( "lbs" ) : _( "kg" );
 }
 
-/**
-* Convert internal velocity units to units defined by user
-*/
+const char *volume_units_abbr()
+{
+    const std::string vol_units = get_option<std::string>( "VOLUME_UNITS" );
+    if( vol_units == "c" ) {
+        return _( "c" );
+    } else if( vol_units == "l" ) {
+        return _( "L" );
+    } else {
+        return _( "qt" );
+    }
+}
+
+const char *volume_units_long()
+{
+    const std::string vol_units = get_option<std::string>( "VOLUME_UNITS" );
+    if( vol_units == "c" ) {
+        return _( "cup" );
+    } else if( vol_units == "l" ) {
+        return _( "liter" );
+    } else {
+        return _( "quart" );
+    }
+}
+
 double convert_velocity( int velocity, const units_type vel_units )
 {
     // internal units to mph conversion
     double ret = double( velocity ) / 100;
 
-    if( OPTIONS["USE_METRIC_SPEEDS"] == "km/h" ) {
+    if( get_option<std::string>( "USE_METRIC_SPEEDS" ) == "km/h" ) {
         switch( vel_units ) {
             case VU_VEHICLE:
                 // mph to km/h conversion
@@ -277,14 +231,11 @@ double convert_velocity( int velocity, const units_type vel_units )
     return ret;
 }
 
-/**
-* Convert weight in grams to units defined by user (kg or lbs)
-*/
 double convert_weight( int weight )
 {
     double ret;
     ret = double( weight );
-    if( OPTIONS["USE_METRIC_WEIGHTS"] == "kg" ) {
+    if( get_option<std::string>( "USE_METRIC_WEIGHTS" ) == "kg" ) {
         ret /= 1000;
     } else {
         ret /= 453.6;
@@ -292,9 +243,68 @@ double convert_weight( int weight )
     return ret;
 }
 
+double convert_volume( int volume )
+{
+    return convert_volume( volume, NULL );
+}
+
+double convert_volume( int volume, int *out_scale )
+{
+    double ret = volume;
+    int scale = 0;
+    const std::string vol_units = get_option<std::string>( "VOLUME_UNITS" );
+    if( vol_units == "c" ) {
+        ret *= 0.004;
+        scale = 1;
+    } else if( vol_units == "l" ) {
+        ret *= 0.001;
+        scale = 2;
+    } else {
+        ret *= 0.00105669;
+        scale = 2;
+    }
+    if( out_scale != NULL ) {
+        *out_scale = scale;
+    }
+    return ret;
+}
+
 double temp_to_celsius( double fahrenheit )
 {
     return ( ( fahrenheit - 32.0 ) * 5.0 / 9.0 );
+}
+
+double clamp_to_width( double value, int width, int &scale )
+{
+    return clamp_to_width( value, width, scale, NULL );
+}
+
+double clamp_to_width( double value, int width, int &scale, bool *out_truncated )
+{
+    if( out_truncated != NULL ) {
+        *out_truncated = false;
+    }
+    if( value >= std::pow( 10.0, width ) ) {
+        // above the maximum number we can fit in the width without decimal
+        // show the bigest number we can without decimal
+        // flag as truncated
+        value = std::pow( 10.0, width ) - 1.0;
+        scale = 0;
+        if( out_truncated != NULL ) {
+            *out_truncated = true;
+        }
+    } else if( scale > 0 ) {
+        for( int s = 1; s <= scale; s++ ) {
+            int scale_width = 1 + s; // 1 decimal separator + "s"
+            if( width > scale_width && value >= std::pow( 10.0, width - scale_width ) ) {
+                // above the maximum number we can fit in the width with "s" decimals
+                // show this number with one less decimal than "s"
+                scale = s - 1;
+                break;
+            }
+        }
+    }
+    return value;
 }
 
 float multi_lerp( const std::vector<std::pair<float, float>> &points, float x )
@@ -392,4 +402,128 @@ bool write_to_file_exclusive( const std::string &path,
         }
         return false;
     }
+}
+
+std::istream &safe_getline( std::istream &ins, std::string &str )
+{
+    str.clear();
+    std::istream::sentry se( ins, true );
+    std::streambuf *sb = ins.rdbuf();
+
+    while( true ) {
+        int c = sb->sbumpc();
+        switch( c ) {
+            case '\n':
+                return ins;
+            case '\r':
+                if( sb->sgetc() == '\n' ) {
+                    sb->sbumpc();
+                }
+                return ins;
+            case EOF:
+                if( str.empty() ) {
+                    ins.setstate( std::ios::eofbit );
+                }
+                return ins;
+            default:
+                str += ( char )c;
+        }
+    }
+}
+
+bool read_from_file( const std::string &path, const std::function<void( std::istream & )> &reader )
+{
+    try {
+        std::ifstream fin( path, std::ios::binary );
+        if( !fin ) {
+            throw std::runtime_error( "opening file failed" );
+        }
+        reader( fin );
+        if( fin.bad() ) {
+            throw std::runtime_error( "reading file failed" );
+        }
+        return true;
+
+    } catch( const std::exception &err ) {
+        debugmsg( _( "Failed to read from \"%1$s\": %2$s" ), path.c_str(), err.what() );
+        return false;
+    }
+}
+
+bool read_from_file_json( const std::string &path, const std::function<void( JsonIn & )> &reader )
+{
+    return read_from_file( path, [&reader]( std::istream & fin ) {
+        JsonIn jsin( fin );
+        reader( jsin );
+    } );
+}
+
+bool read_from_file( const std::string &path, JsonDeserializer &reader )
+{
+    return read_from_file_json( path, [&reader]( JsonIn & jsin ) {
+        reader.deserialize( jsin );
+    } );
+}
+
+bool read_from_file_optional( const std::string &path,
+                              const std::function<void( std::istream & )> &reader )
+{
+    // Note: slight race condition here, but we'll ignore it. Worst case: the file
+    // exists and got removed before reading it -> reading fails with a message
+    // Or file does not exists, than everything works fine because it's optional anyway.
+    return file_exist( path ) && read_from_file( path, reader );
+}
+
+bool read_from_file_optional_json( const std::string &path,
+                                   const std::function<void( JsonIn & )> &reader )
+{
+    return read_from_file_optional( path, [&reader]( std::istream & fin ) {
+        JsonIn jsin( fin );
+        reader( jsin );
+    } );
+}
+
+bool read_from_file_optional( const std::string &path, JsonDeserializer &reader )
+{
+    return read_from_file_optional_json( path, [&reader]( JsonIn & jsin ) {
+        reader.deserialize( jsin );
+    } );
+}
+
+std::string obscure_message( const std::string &str, std::function<char( void )> f )
+{
+    //~ translators: place some random 1-width characters here in your language if possible, or leave it as is
+    std::string gibberish_narrow = _( "abcdefghijklmnopqrstuvwxyz" );
+    //~ translators: place some random 2-width characters here in your language if possible, or leave it as is
+    std::string gibberish_wide =
+        _( "に坂索トし荷測のンおク妙免イロコヤ梅棋厚れ表幌" );
+    std::wstring w_gibberish_narrow = utf8_to_wstr( gibberish_narrow );
+    std::wstring w_gibberish_wide = utf8_to_wstr( gibberish_wide );
+    std::wstring w_str = utf8_to_wstr( str );
+    char transformation[2] = { 0 }; // a trailing NULL terminator is necessary for utf8_width function
+    for( size_t i = 0; i < w_str.size(); ++i ) {
+        transformation[0] = f();
+        std::string this_char = wstr_to_utf8( std::wstring( 1, w_str[i] ) );
+        if( transformation[0] == -1 ) {
+            continue;
+        } else if( transformation[0] == 0 ) {
+            if( utf8_width( this_char ) == 1 ) {
+                w_str[i] = random_entry( w_gibberish_narrow );
+            } else {
+                w_str[i] = random_entry( w_gibberish_wide );
+            }
+        } else {
+            // Only support the case eg. replace current character to symbols like # or ?
+            if( utf8_width( transformation ) != 1 ) {
+                debugmsg( "target character isn't narrow" );
+            }
+            // A 2-width wide character in the original string should be replace by two narrow characters
+            w_str.replace( i, 1, utf8_to_wstr( std::string( utf8_width( this_char ), transformation[0] ) ) );
+        }
+    }
+    std::string result = wstr_to_utf8( w_str );
+    if( utf8_width( str ) != utf8_width( result ) ) {
+        debugmsg( "utf8_width differ between original string and obscured string" );
+    }
+    return result;
 }

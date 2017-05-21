@@ -8,9 +8,8 @@
         "description": "A dead body.",
         "//": "most of the properties depend on the monster type and are created at runtime!",
         "price": 0,
-        "weight": 0,
         "volume": 0,
-        "flags": ["NO_UNLOAD"]
+        "flags": ["NO_UNLOAD", "TRADER_AVOID"]
     },
     {
         "type":"GENERIC",
@@ -22,9 +21,8 @@
         "name_plural": "none",
         "description": "seeing this is a bug",
         "price": 0,
-        "weight": 0,
         "volume": 0,
-        "flags": ["PSEUDO"]
+        "flags": ["PSEUDO", "TRADER_AVOID"]
     },
     {
         "type" : "GENERIC",
@@ -35,10 +33,13 @@
         "name" : "muscle",
         "name_plural" : "none",
         "description" : "seeing this is a bug",
+        "stackable": true,
         "price" : 0,
-        "weight" : 0,
         "volume" : 0,
-        "flags": ["PSEUDO"]
+        "flags": ["PSEUDO"],
+        "fuel": {
+            "energy": 1
+        }
     },
     {
         "type":"GENERIC",
@@ -50,22 +51,8 @@
         "name_plural": "none",
         "description": "seeing this is a bug",
         "price": 0,
-        "weight": 0,
         "volume": 0,
-        "flags": ["PSEUDO"]
-    },
-    {
-        "type":"GENERIC",
-        "id": "cvd_machine",
-        "symbol": "$",
-        "color": "red",
-        "name": "cvd machine",
-        "name_plural": "none",
-        "description": "seeing this is a bug",
-        "price": 0,
-        "weight": 0,
-        "volume": 0,
-        "flags": ["PSEUDO"]
+        "flags": ["PSEUDO", "TRADER_AVOID"]
     },
     {
         "type":"GENERIC",
@@ -76,9 +63,8 @@
         "name_plural": "none",
         "description": "seeing this is a bug",
         "price": 0,
-        "weight": 0,
         "volume": 0,
-        "flags": ["PSEUDO", "UNARMED_WEAPON"], "//" : "Fist is internally represented as 'wielding a none as a weapon'"
+        "flags": ["PSEUDO", "UNARMED_WEAPON", "TRADER_AVOID"], "//" : "Fist is internally represented as 'wielding a none as a weapon'"
     },
     {
         "type":"GENERIC",
@@ -91,7 +77,7 @@
         "symbol" : ",",
         "material" : ["paper"],
         "volume" : 1,
-        "price" : 0
+        "flags": [ "TRADER_AVOID" ]
     },
     {
         "type":"GENERIC",
@@ -100,12 +86,11 @@
         "color": "light_gray",
         "name": "withered plant",
         "description": "A dead plant.  Good for starting fires.",
-        "price": 100,
         "material": "paper",
         "weight": 20,
         "volume": 1,
-        "bashing": -8,
-        "to_hit": -2
+        "to_hit": -2,
+        "flags": [ "TRADER_AVOID" ]
     },
     {
         "type":"GENERIC",
@@ -119,7 +104,6 @@
         "flags": ["NO_SALVAGE"],
         "weight": 114,
         "volume": 1,
-        "bashing": -8,
         "category": "spare_parts"
     },
     {
@@ -135,7 +119,6 @@
         "flags": ["NO_SALVAGE"],
         "weight": 100,
         "volume": 1,
-        "bashing": -2,
         "category" : "spare_parts",
         "to_hit": -1
     },
@@ -152,7 +135,6 @@
         "flags": ["NO_SALVAGE"],
         "weight": 100,
         "volume": 1,
-        "bashing": -2,
         "category" : "spare_parts",
         "to_hit": -1
     },
@@ -183,7 +165,6 @@
         "material": "plastic",
         "weight": 45,
         "volume": 1,
-        "bashing": -2,
         "to_hit": -2,
         "flags" : ["UNRECOVERABLE"]
     },
@@ -212,54 +193,6 @@
     },
     {
         "type":"GENERIC",
-        "id": "vine_30",
-        "category" : "spare_parts",
-        "symbol": ",",
-        "color": "light_green",
-        "name": "vine",
-        "description": "A sturdy 30-foot long vine.  Could easily be used as a rope, but can't be disassembled.",
-        "price": 5000,
-        "material": "veggy",
-        "flags" : "WRAP",
-        "weight": 1080,
-        "volume": 10,
-        "bashing": 1,
-        "to_hit": -1
-    },
-    {
-        "type":"GENERIC",
-        "id": "rope_30",
-        "category" : "spare_parts",
-        "symbol": ",",
-        "color": "light_gray",
-        "name": "long rope",
-        "description": "A 30-foot long nylon rope.  Useful for keeping yourself safe from falls.",
-        "price": 10000,
-        "material": "cotton",
-        "flags": ["NO_SALVAGE", "WRAP"],
-        "weight": 1080,
-        "volume": 10,
-        "bashing": 1,
-        "to_hit": -1
-    },
-    {
-        "type":"GENERIC",
-        "id" : "rope_6",
-        "category" : "spare_parts",
-        "name" : "short rope",
-        "description" : "A six-foot long piece of rope.  Too small to be of much use.",
-        "weight" : 216,
-        "to_hit" : 1,
-        "color" : "light_gray",
-        "symbol" : ",",
-        "material" : ["cotton"],
-        "volume" : 2,
-        "bashing" : 1,
-        "flags" : ["WRAP", "NO_SALVAGE"],
-        "price" : 4500
-    },
-    {
-        "type":"GENERIC",
         "id" : "chain",
         "category" : "spare_parts",
         "name" : "steel chain",
@@ -271,7 +204,6 @@
         "techniques" : ["WRAP"],
         "volume" : 4,
         "bashing" : 12,
-        "flags" : ["WRAP"],
         "price" : 8000
     },
     {
@@ -300,7 +232,6 @@
         "material": "veggy",
         "weight": 60,
         "volume": 1,
-        "bashing": -8,
         "to_hit": -3
     },
     {
@@ -310,13 +241,13 @@
         "color": "light_gray",
         "name": "empty canister",
         "description": "An empty canister, which may have once held tear gas or other substances.",
-        "price": 100,
         "material": "aluminum",
         "weight": 158,
         "volume": 1,
         "bashing": 2,
         "to_hit": -1,
-        "qualities": [["BOIL", 2], ["CONTAIN", 1]]
+        "qualities": [ ["BOIL", 2], ["CONTAIN", 1] ],
+        "flags": [ "TRADER_AVOID" ]
     },
     {
         "type":"GENERIC",
@@ -404,7 +335,7 @@
         "price": 10000,
         "price_postapoc": 100,
         "material": "gold",
-        "weight": 1514,
+        "weight": 1500,
         "volume": 1,
         "bashing": 9
     },
@@ -514,8 +445,7 @@
         "weight": 2340,
         "volume": 4,
         "bashing": 4,
-        "ammo_type" : "components",
-        "count" : 1
+        "ammo_type" : "components"
         },
     {
         "type":"GENERIC",
@@ -539,30 +469,15 @@
         "symbol": "/",
         "color": "brown",
         "name": "splintered wood",
-        "description": "A splintered piece of wood, useless as anything but kindling.",
+        "description": "A splintered piece of wood, could be used as a skewer or for kindling.",
         "category": "other",
-        "price": 0,
         "material": "wood",
         "weight": 453,
         "volume": 1,
         "bashing": 4,
-        "to_hit": 1
-    },
-    {
-        "type":"GENERIC",
-        "id": "skewer",
-        "symbol": ",",
-        "color": "brown",
-        "name": "skewer",
-        "description": "A thin wooden skewer.  Squirrel on a stick, anyone?",
-        "category": "other",
-        "price": 0,
-        "material": "wood",
-        "flags": ["NO_SALVAGE"],
-        "weight": 6,
-        "volume": 0,
-        "to_hit": -5,
-        "qualities": [["COOK", 1]]
+        "to_hit": 1,
+        "qualities": [ [ "COOK", 1 ] ],
+        "flags": [ "NO_SALVAGE", "TRADER_AVOID" ]
     },
     {
         "type":"GENERIC",
@@ -572,8 +487,8 @@
         "name": "bone skewer",
         "description": "A thin skewer carved from bone.  Sadly, it won't make squirrel on a stick taste better.",
         "category": "other",
-        "price": 0,
         "material": "bone",
+        "flags": [ "NO_SALVAGE", "TRADER_AVOID" ],
         "weight": 10,
         "volume": 0,
         "to_hit": -5,
@@ -588,12 +503,12 @@
         "name_plural": "burnt out torches",
         "description": "A torch that has consumed all its fuel; it can be recrafted into another torch.",
         "category": "other",
-        "price": 0,
         "material": "wood",
         "weight": 751,
         "volume": 3,
         "bashing": 8,
-        "to_hit": 3
+        "to_hit": 3,
+        "flags": [ "TRADER_AVOID" ]
     },
     {
         "type":"GENERIC",
@@ -604,8 +519,8 @@
         "name": "dead flare",
         "name_plural": "dead flares",
         "description": "This is a spent magnesium flare.  It is essentially trash.",
-        "price": 0,
         "material": "plastic",
+        "flags": "TRADER_AVOID",
         "weight": 39,
         "volume": 1,
         "to_hit": -1
@@ -622,8 +537,7 @@
         "price_postapoc": 100,
         "material": "iron",
         "weight": 3220,
-        "volume": 3,
-        "bashing": -1
+        "volume": 3
     },
     {
         "type":"GENERIC",
@@ -653,7 +567,8 @@
         "weight": 1133,
         "volume": 10,
         "bashing": 4,
-        "to_hit": -3
+        "to_hit": -3,
+        "flags": [ "TRADER_AVOID" ]
     },
     {
         "type":"GENERIC",
@@ -667,7 +582,8 @@
         "weight": 2266,
         "volume": 40,
         "bashing": 4,
-        "to_hit": -3
+        "to_hit": -3,
+        "flags": [ "TRADER_AVOID" ]
     },
     {
         "type":"GENERIC",
@@ -761,7 +677,8 @@
         "volume": 60,
         "bashing": 6,
         "cutting": 6,
-        "to_hit": -3
+        "to_hit": -3,
+        "flags": [ "TRADER_AVOID" ]
     },
     {
         "type":"GENERIC",
@@ -777,7 +694,8 @@
         "volume": 120,
         "bashing": 4,
         "cutting": 4,
-        "to_hit": -3
+        "to_hit": -3,
+        "flags": [ "TRADER_AVOID" ]
     },
     {
         "type":"GENERIC",
@@ -794,7 +712,8 @@
         "volume": 250,
         "bashing": 6,
         "cutting": 6,
-        "to_hit": -3
+        "to_hit": -3,
+        "flags": [ "TRADER_AVOID" ]
     },
     {
         "type":"GENERIC",
@@ -811,7 +730,8 @@
         "volume": 250,
         "bashing": 6,
         "cutting": 6,
-        "to_hit": -3
+        "to_hit": -3,
+        "flags": [ "TRADER_AVOID" ]
     },
     {
         "type":"GENERIC",
@@ -828,7 +748,8 @@
         "volume": 250,
         "bashing": 6,
         "cutting": 10,
-        "to_hit": -3
+        "to_hit": -3,
+        "flags": [ "TRADER_AVOID" ]
     },
     {
         "type":"GENERIC",
@@ -844,7 +765,8 @@
         "volume": 750,
         "bashing": 10,
         "cutting": 6,
-        "to_hit": -2
+        "to_hit": -2,
+        "flags": [ "TRADER_AVOID" ]
     },
     {
         "type":"GENERIC",
@@ -860,7 +782,8 @@
         "volume": 3500,
         "bashing": 20,
         "cutting": 15,
-        "to_hit": -3
+        "to_hit": -3,
+        "flags": [ "TRADER_AVOID" ]
     },
     {
         "type":"GENERIC",
@@ -876,7 +799,8 @@
         "volume": 3,
         "bashing": 6,
         "cutting": 6,
-        "to_hit": -3
+        "to_hit": -3,
+        "flags": [ "TRADER_AVOID" ]
     },
     {
         "type":"GENERIC",
@@ -893,7 +817,8 @@
         "volume": 3,
         "bashing": 6,
         "cutting": 6,
-        "to_hit": -3
+        "to_hit": -3,
+        "flags": [ "TRADER_AVOID" ]
     },
     {
         "type":"GENERIC",
@@ -910,7 +835,8 @@
         "volume": 3,
         "bashing": 6,
         "cutting": 6,
-        "to_hit": -3
+        "to_hit": -3,
+        "flags": [ "TRADER_AVOID" ]
     },
     {
         "type":"GENERIC",
@@ -927,7 +853,8 @@
         "volume": 3,
         "bashing": 6,
         "cutting": 6,
-        "to_hit": -3
+        "to_hit": -3,
+        "flags": [ "TRADER_AVOID" ]
     },
     {
         "type":"GENERIC",
@@ -944,7 +871,8 @@
         "volume": 3,
         "bashing": 6,
         "cutting": 6,
-        "to_hit": -3
+        "to_hit": -3,
+        "flags": [ "TRADER_AVOID" ]
     },
     {
         "type":"GENERIC",
@@ -961,7 +889,8 @@
         "volume": 3,
         "bashing": 6,
         "cutting": 6,
-        "to_hit": -3
+        "to_hit": -3,
+        "flags": [ "TRADER_AVOID" ]
     },
     {
         "type":"GENERIC",
@@ -978,7 +907,8 @@
         "volume": 3,
         "bashing": 6,
         "cutting": 6,
-        "to_hit": -3
+        "to_hit": -3,
+        "flags": [ "TRADER_AVOID" ]
     },
     {
         "type":"GENERIC",
@@ -1090,12 +1020,13 @@
         "description": "A high-quality lens, useful for focusing or diffusing light.  Might be useful for starting a fire.",
         "price": 120000,
         "material": "glass",
-        "flags": [ "LENS" ],
         "weight": 340,
         "volume": 0,
         "to_hit": -3,
         "use_action": {
-            "type": "extended_firestarter",
+            "type": "firestarter",
+            "moves": 1000,
+            "moves_slow": 30000,
             "need_sunlight": true
         }
     },
@@ -1111,7 +1042,8 @@
         "material": ["steel", "plastic"],
         "weight": 317,
         "volume": 10,
-        "to_hit": -1
+        "to_hit": -1,
+        "flags": [ "TRADER_AVOID" ]
     },
     {
         "type":"GENERIC",
@@ -1169,21 +1101,6 @@
         "volume": 8,
         "bashing": 4,
         "to_hit": 1
-    },
-    {
-        "type":"GENERIC",
-        "id" : "cell_phone",
-        "name" : "cell phone",
-        "description" : "A simple cell phone.  Nowadays only useful for telling the time or as an alarm clock.  Can also be disassembled into some useful parts.",
-        "weight" : 226,
-        "to_hit" : -3,
-        "color" : "light_gray",
-        "symbol" : ",",
-        "material" : ["plastic", "aluminum"],
-        "volume" : 2,
-        "price" : 10000,
-        "price_postapoc": 2000,
-        "flags" : ["WATCH", "ALARMCLOCK"]
     },
     {
         "type":"GENERIC",
@@ -1261,36 +1178,6 @@
     },
     {
         "type":"GENERIC",
-        "id": "ceramic_bowl",
-        "symbol": ",",
-        "color": "yellow",
-        "name": "ceramic bowl",
-        "description": "A shallow dessert bowl, not a lot of use for it really.",
-        "price": 1000,
-        "price_postapoc": 0,
-        "material": "ceramic",
-        "weight": 400,
-        "volume": 1,
-        "bashing": 1,
-        "qualities": [["CONTAIN", 1]]
-    },
-    {
-        "type":"GENERIC",
-        "id": "ceramic_cup",
-        "symbol": ",",
-        "color": "yellow",
-        "name": "ceramic cup",
-        "description": "A ceramic teacup, pinky out!",
-        "price": 1000,
-        "price_postapoc": 0,
-        "material": "ceramic",
-        "weight": 300,
-        "volume": 1,
-        "bashing": 1,
-        "qualities": [["CONTAIN", 1]]
-    },
-    {
-        "type":"GENERIC",
         "id": "fish_bowl",
         "symbol": "u",
         "color": "light_cyan",
@@ -1316,37 +1203,6 @@
         "weight": 452,
         "volume": 1,
         "bashing": 1
-    },
-    {
-        "type":"GENERIC",
-        "id": "glass_bowl",
-        "symbol": ",",
-        "color": "cyan",
-        "name": "glass bowl",
-        "description": "A glass dessert bowl, not a lot of use for it really.",
-        "price": 800,
-        "price_postapoc": 0,
-        "material": "glass",
-        "weight": 500,
-        "volume": 1,
-        "bashing": 1,
-        "qualities": [["CONTAIN", 1]]
-    },
-    {
-        "type":"GENERIC",
-        "id": "glass",
-        "symbol": ",",
-        "color": "cyan",
-        "name": "glass",
-        "name_plural": "glasses",
-        "description": "A tall glass, just begging for a frosty one!",
-        "price": 400,
-        "price_postapoc": 0,
-        "material": "glass",
-        "weight": 375,
-        "volume": 1,
-        "bashing": 1,
-        "qualities": [["CONTAIN", 1]]
     },
     {
         "type":"GENERIC",
@@ -1435,9 +1291,8 @@
         "color": "red",
         "name": "blood soaked rag",
         "description": "A large rag, drenched in blood.  It could be cleaned with boiling water.",
-        "price": 0,
         "material": "cotton",
-        "flags": ["NO_SALVAGE"],
+        "flags": ["NO_SALVAGE", "TRADER_AVOID"],
         "weight": 80,
         "volume": 1
     },
@@ -1644,56 +1499,6 @@
   },
     {
         "type":"GENERIC",
-        "id": "steel_chunk",
-        "symbol": ",",
-        "color": "light_gray",
-        "name": "chunk of steel",
-        "name_plural": "chunks of steel",
-        "category": "spare_parts",
-        "description": "A misshapen chunk of steel.  Makes a decent weapon in a pinch, and is also useful for some crafting recipes.",
-        "price": 1000,
-        "material": "steel",
-        "weight": 340,
-        "volume": 2,
-        "bashing": 8,
-        "to_hit": -2,
-        "qualities": [["HAMMER", 1]]
-    },
-    {
-        "type":"GENERIC",
-        "id": "steel_lump",
-        "symbol": ",",
-        "color": "light_gray",
-        "name": "lump of steel",
-        "name_plural": "lumps of steel",
-        "category": "spare_parts",
-        "description": "A misshapen heavy piece of steel.  Useful for some crafting recipes.",
-        "price": 2000,
-        "material": "steel",
-        "weight": 1360,
-        "volume": 2,
-        "bashing": 12,
-        "to_hit": -4,
-        "qualities": [["HAMMER", 1]]
-    },
-    {
-        "type":"GENERIC",
-        "id": "scrap",
-        "symbol": ",",
-        "color": "light_gray",
-        "name": "scrap metal",
-        "name_plural": "scrap metal",
-        "category": "spare_parts",
-        "description": "An assortment of small bits of metal and scrap useful in all kinds of crafting",
-        "price": 1000,
-        "material": "steel",
-        "weight": 113,
-        "volume": 1,
-        "bashing": 1,
-        "to_hit": -2
-    },
-    {
-        "type":"GENERIC",
         "id": "scrap_copper",
         "symbol": ",",
         "color": "light_gray",
@@ -1710,33 +1515,17 @@
     },
     {
         "type":"GENERIC",
-        "id": "lead_plate",
-        "symbol": ",",
-        "color": "dark_gray",
-        "name": "lead battery plate",
-        "category": "spare_parts",
-        "description": "An electrode plate from a lead-acid battery.",
-        "price": 10,
-        "material": "steel",
-        "weight": 400,
-        "volume": 1,
-        "bashing": 4,
-        "to_hit": -2
-    },
-    {
-        "type":"GENERIC",
         "id": "glass_shard",
         "symbol": ",",
         "color": "light_cyan",
         "name": "glass shard",
         "category": "other",
         "description": "A broken shard of glass covered in sharp edges.  You could use it as a weapon, but you might want to wear gloves.",
-        "price": 0,
         "material": "glass",
         "weight": 89,
         "volume": 1,
         "cutting": 6,
-        "flags": ["HURT_WHEN_WIELDED", "HURT_WHEN_PULLED"],
+        "flags": [ "HURT_WHEN_WIELDED", "HURT_WHEN_PULLED", "TRADER_AVOID" ],
         "to_hit": -1
     },
     {
@@ -1811,7 +1600,7 @@
         "category": "other",
         "price": 20000,
         "material": "iron",
-        "flags": ["DURABLE_MELEE"],
+        "flags": ["DURABLE_MELEE", "TRADER_AVOID"],
         "weight": 36287,
         "volume": 12,
         "bashing": 20,
@@ -1824,11 +1613,11 @@
         "color": "green",
         "name": "pine bough",
         "description": "A branch from a pine tree, oozing sticky sap and bristling with prickly needles.",
-        "price": 0,
         "material": "wood",
         "weight": 220,
         "volume": 2,
-        "to_hit": -2
+        "to_hit": -2,
+        "flags": [ "TRADER_AVOID" ]
     },
     {
         "type":"GENERIC",
@@ -1837,11 +1626,11 @@
         "color": "brown",
         "name": "pinecone",
         "description": "A spiny pod from a pine tree.  Dry seeds rattle around inside when you shake it.",
-        "price": 0,
         "material": "wood",
         "weight": 90,
         "volume": 1,
-        "to_hit": -2
+        "to_hit": -2,
+        "flags": [ "TRADER_AVOID" ]
     },
     {
         "type":"GENERIC",
@@ -1980,8 +1769,7 @@
         "weight": 2340,
         "volume": 4,
         "bashing": 4,
-        "ammo_type" : "components",
-        "count" : 1
+        "ammo_type" : "components"
     },
     {
         "type":"GENERIC",
@@ -2066,10 +1854,6 @@
         "volume" : 5,
         "weight" : 10,
         "ammo_type" : "NULL",
-        "damage" : 0,
-        "range" : 0,
-        "dispersion" : 0,
-        "recoil" : 0,
         "count" : 100
     },
     {   "type" : "AMMO",
@@ -2085,10 +1869,6 @@
         "volume" : 5,
         "weight" : 10,
         "ammo_type" : "NULL",
-        "damage" : 0,
-        "range" : 0,
-        "dispersion" : 0,
-        "recoil" : 0,
         "count" : 100
     },
     {   "type" : "AMMO",
@@ -2104,10 +1884,6 @@
         "volume" : 5,
         "weight" : 10,
         "ammo_type" : "NULL",
-        "damage" : 0,
-        "range" : 0,
-        "dispersion" : 0,
-        "recoil" : 0,
         "count" : 100
     },
     {   "type" : "AMMO",
@@ -2123,10 +1899,6 @@
         "volume" : 5,
         "weight" : 10,
         "ammo_type" : "NULL",
-        "damage" : 0,
-        "range" : 0,
-        "dispersion" : 0,
-        "recoil" : 0,
         "count" : 100
     },
     {   "type" : "AMMO",
@@ -2142,10 +1914,6 @@
         "volume" : 5,
         "weight" : 10,
         "ammo_type" : "NULL",
-        "damage" : 0,
-        "range" : 0,
-        "dispersion" : 0,
-        "recoil" : 0,
         "count" : 100
     },
     {   "type" : "AMMO",
@@ -2161,10 +1929,6 @@
         "volume" : 5,
         "weight" : 10,
         "ammo_type" : "NULL",
-        "damage" : 0,
-        "range" : 0,
-        "dispersion" : 0,
-        "recoil" : 0,
         "count" : 100
     },
     {   "type" : "AMMO",
@@ -2179,10 +1943,6 @@
         "volume" : 7,
         "weight" : 45,
         "ammo_type" : "NULL",
-        "damage" : 0,
-        "range" : 0,
-        "dispersion" : 0,
-        "recoil" : 0,
         "count" : 5
     },
     {   "type" : "AMMO",
@@ -2197,10 +1957,6 @@
         "volume" : 7,
         "weight" : 45,
         "ammo_type" : "NULL",
-        "damage" : 0,
-        "range" : 0,
-        "dispersion" : 0,
-        "recoil" : 0,
         "count" : 5
     },
     {   "type" : "AMMO",
@@ -2215,10 +1971,6 @@
         "volume" : 7,
         "weight" : 45,
         "ammo_type" : "NULL",
-        "damage" : 0,
-        "range" : 0,
-        "dispersion" : 0,
-        "recoil" : 0,
         "count" : 5
     },
     {   "type" : "AMMO",
@@ -2233,10 +1985,6 @@
         "volume" : 7,
         "weight" : 45,
         "ammo_type" : "NULL",
-        "damage" : 0,
-        "range" : 0,
-        "dispersion" : 0,
-        "recoil" : 0,
         "count" : 5
     },
     {
@@ -2310,8 +2058,8 @@
         "name_plural": "piles of straw",
         "category": "spare_parts",
         "description": "A pile of dry grass.  Can be used if there is nothing else to sleep on.",
-        "price": 0,
         "material": ["paper"],
+        "flags": "TRADER_AVOID",
         "weight": 20,
         "volume": 1,
         "to_hit": -2
@@ -2327,8 +2075,7 @@
         "price": 100,
         "material": ["paper"],
         "weight": 80,
-        "volume": 2,
-        "bashing": -3
+        "volume": 2
     },
     {
         "type":"GENERIC",
@@ -2341,7 +2088,6 @@
         "material": ["cotton"],
         "weight": 514,
         "volume": 4,
-        "bashing": -8,
         "category": "other"
     },
     {
@@ -2355,7 +2101,6 @@
         "material": ["cotton"],
         "weight": 514,
         "volume": 4,
-        "bashing": -8,
         "category": "other"
     },
     {
@@ -2368,8 +2113,7 @@
         "price": 200,
         "material": ["cotton"],
         "weight": 514,
-        "volume": 3,
-        "bashing": -2
+        "volume": 3
     },
     {
         "type":"GENERIC",
@@ -2382,8 +2126,6 @@
         "symbol" : ",",
         "material" : ["paper"],
         "volume" : 1,
-        "bashing" : -8,
-        "cutting": -3,
         "price" : 0
     },
     {
@@ -2394,7 +2136,8 @@
         "symbol" : "!",
         "description" : "The smoke billowing from this cigar has a sweet, musty odor.",
         "category" : "drugs",
-        "flags" : [ "LITCIG", "TOBACCO", "LIGHT_4" ]
+        "emits": [ "emit_tobacco_trail" ],
+        "flags" : [ "LITCIG", "TOBACCO", "LIGHT_4", "TRADER_AVOID" ]
     },
     {
         "type" : "GENERIC",
@@ -2403,7 +2146,8 @@
         "color" : "dkgray",
         "symbol" : "!",
         "description" : "A true gentleman always finishes his cigars.",
-        "category" : "other"
+        "category" : "other",
+        "flags": [ "TRADER_AVOID" ]
     },
     {
         "type" : "GENERIC",
@@ -2413,7 +2157,8 @@
         "symbol" : "!",
         "description" : "Smoke swirls from the lit end of this cigarette, filling the air with the thrilling smell of burning chemicals.",
         "category": "drugs",
-        "flags" : [ "LITCIG", "TOBACCO", "LIGHT_4" ]
+        "emits": [ "emit_tobacco_trail" ],
+        "flags" : [ "LITCIG", "TOBACCO", "LIGHT_4", "TRADER_AVOID" ]
     },
     {
         "type" : "GENERIC",
@@ -2422,7 +2167,8 @@
         "color" : "dark_gray",
         "symbol" : "!",
         "description" : "What was once a wonderfully addictive tube of dried tobacco leaf is now just a smelly piece of trash.  What a tragedy!\nThe leftover tobacco in a few of these could probably be used to roll another cigarette.  If you're willing to go that far...",
-        "category" : "other"
+        "category" : "other",
+        "flags": [ "TRADER_AVOID" ]
     },
     {
         "type" : "GENERIC",
@@ -2432,7 +2178,8 @@
         "symbol" : "!",
         "description" : "The smell of skunk permeates the air as a thin trail of smoke floats off of this joint.",
         "category" : "drugs",
-        "flags" : [ "LITCIG", "LIGHT_4" ]
+        "emits": [ "emit_joint_trail" ],
+        "flags" : [ "LITCIG", "LIGHT_4", "TRADER_AVOID" ]
     },
     {
         "type" : "GENERIC",
@@ -2442,7 +2189,8 @@
         "color" : "green",
         "symbol" : "!",
         "description" : "The smoked-down butt of a joint, a reminder of some good times.  Pretty much trash now.  Bummer, man.\nA few of these could probably be used to roll another joint.",
-        "category" : "other"
+        "category" : "other",
+        "flags": [ "TRADER_AVOID" ]
     },
     {
         "type":"GENERIC",
@@ -2525,13 +2273,12 @@
         "symbol": ",",
         "color": "blue",
         "name": "science ID card",
-        "description": "This ID card once belonged to a scientist of some sort.  It has a magnetic stripe on the back; perhaps it can be used on a control panel.",
+        "description": "This ID card once belonged to a scientist.  The reverse side describes protocol for using it; this could grant access at one control panel, if you can find one.",
         "price": 60000,
         "price_postapoc": 5000,
         "material": "plastic",
         "weight": 6,
         "volume": 0,
-        "bashing": -8,
         "to_hit": -3
     },
     {
@@ -2540,20 +2287,19 @@
         "symbol": ",",
         "color": "green",
         "name": "military ID card",
-        "description": "This ID card once belonged to a military officer with high-level clearance.  It has a magnetic stripe on the back; perhaps it can be used on a control panel.",
+        "description": "This ID card once belonged to a military officer.  The reverse side describes protocol for using it; this could grant access at one control panel, if you can find one.",
         "price": 120000,
         "price_postapoc": 10000,
         "material": "plastic",
         "weight": 6,
         "volume": 0,
-        "bashing": -8,
         "to_hit": -3
     },
     {
         "type":"GENERIC",
         "id": "neoprene",
         "symbol": ",",
-        "color": "black",
+        "color": "dark_gray",
         "name": "neoprene sheet",
         "description": "A moderately sized sheet of neoprene.  Can be used to craft light and stretchable clothing.",
         "price": 1000,
@@ -2575,5 +2321,31 @@
         "weight": 5000,
         "volume": 3,
         "category": "spare_parts"
+    },
+    {
+        "id": "light_bulb",
+        "type":"GENERIC",
+        "name": "light bulb",
+        "description": "A rather outdated light bulb used in all sorts of light equipment.",
+        "symbol": ",",
+        "color": "white",
+        "material": "glass",
+        "weight": 10,
+        "volume": 1,
+        "price": 500
+    },
+    {
+        "id": "shrapnel",
+        "type": "AMMO",
+        "name": "shrapnel",
+        "description": "A twisted shard of jagged metal.",
+        "weight": 5,
+        "volume": 1,
+        "price": 0,
+        "stack_size": 50,
+        "material": [ "steel" ],
+        "symbol": ".",
+        "color": "white",
+        "ammo_type": "components"
     }
 ]

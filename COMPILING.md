@@ -66,7 +66,7 @@ Given you're building from source you have a number of choices to make:
   * `LOCALIZE=0` - this disables localizations so `gettext` is not needed
   * `LUA=1` - this enables Lua support; needed only for full-fledged mods
   * `CLANG=1` - use Clang instead of GCC
-  * `CACHE=1` - use ccache
+  * `CCACHE=1` - use ccache
   * `USE_LIBCXX=1` - use libc++ instead of libstdc++ with Clang (default on OS X)
 
 There is a couple of other possible options - feel free to read the `Makefile`.
@@ -185,6 +185,72 @@ Run:
     PLATFORM="i686-w64-mingw32.static"
     make CROSS="~/src/mxe/usr/bin/${PLATFORM}-" LUA=1 RELEASE=1 LOCALIZE=1
 
+## Cross-compile to Mac OS X from Linux
+
+The procedure is very much similar to cross-compilation to Windows from Linux.
+Tested on ubuntu 14.04 LTS but should work on other distros as well.
+
+### Dependencies
+
+  * OSX cross-compiling toolchain [osxcross](https://github.com/tpoechtrager/osxcross)
+
+  * `genisoimage` and [libdmg-hfsplus](https://github.com/planetbeing/libdmg-hfsplus.git) to create dmg distributions
+
+Make sure that all dependency tools are in search `PATH` before compiling.
+
+### Setup
+
+To set up the compiling environment execute the following commands
+`git clone https://github.com/tpoechtrager/osxcross.git` to clone the toolchain
+`cd osxcross`
+`cp ~/MacOSX10.11.sdk.tar.bz2 ./tarballs/` copy prepared MacOSX SDK tarball on place. [Read more about it](https://github.com/tpoechtrager/osxcross/blob/master/README.md#packaging-the-sdk)
+`OSX_VERSION_MIN=10.7 ./build.sh to build everything`
+Note the targeted minimum supported version of OSX.
+
+Have a prepackaged set of libs and frameworks in place, since compiling with `osxcross` built-in MacPorts is rather difficult and not supported at the moment.
+Your directory tree should look like:
+
+    ~/
+    ├── Frameworks
+    │   ├── SDL2.framework
+    │   ├── SDL2_image.framework
+    │   ├── SDL2_mixer.framework
+    │   └── SDL2_ttf.framework
+    └── libs
+        ├── gettext
+        │   ├── include
+        │   └── lib
+        ├── lua
+        │   ├── include
+        │   └── lib
+        └── ncurses
+            ├── include
+            └── lib
+
+Populated with respective frameworks, dylibs and headers.
+Tested lib versions are libintl.8.dylib for gettext, liblua.5.2.4.dylib for lua, libncurses.5.4.dylib for ncurses.
+These libs were obtained from `homebrew` binary distribution at OS X 10.11
+Frameworks were obtained from SDL official website as described in the next [section](https://github.com/CleverRaven/Cataclysm-DDA/blob/master/COMPILING.md#sdl)
+
+### Building (SDL)
+
+To build full feature tiles and sound enabled version with localizations and lua enabled:
+
+    make dmgdist CROSS=x86_64-apple-darwin15- NATIVE=osx OSX_MIN=10.7 USE_HOME_DIR=1 CLANG=1
+      RELEASE=1 LOCALIZE=1 LANGUAGES=all LUA=1 TILES=1 SOUND=1 FRAMEWORK=1
+      OSXCROSS=1 LIBSDIR=../libs FRAMEWORKSDIR=../Frameworks
+
+Make sure that `x86_64-apple-darwin15-clang++` is in `PATH` environment variable.
+
+### Building (ncurses)
+
+To build full curses version with localizations and lua enabled:
+
+    make dmgdist CROSS=x86_64-apple-darwin15- NATIVE=osx OSX_MIN=10.7 USE_HOME_DIR=1 CLANG=1
+      RELEASE=1 LOCALIZE=1 LANGUAGES=all LUA=1 OSXCROSS=1 LIBSDIR=../libs FRAMEWORKSDIR=../Frameworks
+
+Make sure that `x86_64-apple-darwin15-clang++` is in `PATH` environment variable.
+
 # Mac OS X
 
 To build Cataclysm on Mac you'll need [Command Line Tools for Xcode](https://developer.apple.com/downloads/) and the [Homebrew](http://brew.sh) package manager. With Homebrew, you can easily install or build Cataclysm using the Cataclysm forumla on Homebrew Games.
@@ -277,6 +343,27 @@ For MacPorts:
     sudo port install gettext ncurses
     hash -r
 
+### gcc
+    
+The version of gcc/g++ installed with the [Command Line Tools for Xcode](https://developer.apple.com/downloads/) is actually just a front end for the same Apple LLVM as clang.  This doesn't necessarily cause issues, but this version of gcc/g++ will have clang error messages and essentially produce the same results as if using clang. To compile with the "real" gcc/g++, install it with homebrew:
+
+    brew install gcc
+    
+However, homebrew installs gcc as gcc-6 (where 6 is the version) to avoid conflicts. The simplest way to use the homebrew version at `/usr/local/bin/gcc-6` instead of the Apple LLVM version at `/usr/bin/gcc` is to symlink the necessary.
+    
+    cd /usr/local/bin
+    ln -s gcc-6 gcc
+    ln -s g++-6 g++
+    ln -s c++-6 c++
+    
+Or, to do this for everything in `/usr/local/bin/` ending with `-6`, 
+
+    find /usr/local/bin -name "*-6" -exec sh -c 'ln -s "$1" $(echo "$1" | sed "s/..$//")' _ {} \;
+    
+Also, you need to make sure that `/usr/local/bin` appears before `/usr/bin` in your `$PATH`, or else this will not work.
+
+Check that `gcc -v` shows the homebrew version you installed.
+
 ### Compiling
 
 The Cataclysm source is compiled using `make`.
@@ -294,6 +381,7 @@ The Cataclysm source is compiled using `make`.
 * `CLANG=1` build with [Clang](http://clang.llvm.org/), the compiler that's included with the latest Command Line Tools for Xcode; omit to build using gcc/g++.
 * `MACPORTS=1` build against dependencies installed via Macports, currently only `gettext` and `ncurses`.
 * `USE_HOME_DIR=1` places user files (config, saves, graveyard, etc) in the user's home directory. For curses builds, this is `/Users/<user>/.cataclysm-dda`, for SDL builds it is `/Users/<user>/Library/Application Support/Cataclysm`.
+* `DEBUG_SYMBOLS=1` retains debug symbols when building an optimized release binary, making it easy for developers to spot the crash site.
 
 In addition to the options above, there is an `app` make target which will package the tiles build into `Cataclysm.app`, a complete tiles build in a Mac application that can run without Terminal.
 
@@ -366,6 +454,32 @@ Open Terminal's preferences, turn on "Use bright colors for bold text" in "Prefe
 
 
 # Windows
+
+## Visual Studio Guide
+
+Visual Studio 2015 is required to build Cataclysm. We created solution and project files in directory `msvc-full-features`. Because of the complexity and how troublesome defining every combination of build feature options are, in Visual Studio project we added all build features, including tiles, sound, localization and lua.
+
+### Dependencies
+
+We've prepared an archive containing all the headers and libraries required to build Cataclysm: [http://dev.narc.ro/cataclysm/WinDepend-MSVC.zip](http://dev.narc.ro/cataclysm/WinDepend-MSVC.zip) or [http://dev.narc.ro/cataclysm/WinDepend-MSVC.7z](http://dev.narc.ro/cataclysm/WinDepend-MSVC.7z). The latter is smaller, but if you don't have a 7-zip archive extracter, the former one is easier to deal with.
+
+Extract the 'WinDepend' folder and put it in the root folder of Cataclysm project.
+
+All the thing you need to do next is to install lua. Download x86 32-bit `lua.exe` from [http://lua-users.org/wiki/LuaBinaries](http://lua-users.org/wiki/LuaBinaries) and put it in `C:\Windows\System32` if you are using a 32-bit Windows, or `C:\Windows\SysWOW64` if you are using a 64-bit Windows.
+
+### Building
+
+Building Cataclysm with Visual Studio is very simple. Just build it like a normal Visual C++ project. The process may takes a long period of time, so you'd better prepare a cup of coffee and some books in front of your computer :)
+
+If you need localization support, execute the bash script `lang/compile_mo.sh` inside Git Bash GUI just like on a UNIX-like system.
+
+### Debugging
+
+After building Cataclysm, you may discover that after pressing the debug button in Visual Studio, Cataclysm just exits after launch with return code 1. That is because of the wrong working directory. You need to configure the working directory to `$(ProjectDir)..`.
+
+### Make a distribution
+
+There is a batch script in `msvc-full-features` folder `distribute.bat`. It will create a sub folder `distribution` and copy all required files(eg. `data/`, `Cataclysm.exe` and dlls) into that folder. Then you can zip it and share the archive on the Internet.
 
 ## MinGW Guide
 To compile under windows MinGW you first need to download mingw. An automated GUI installer assistant called mingw-get-setup.exe will make everything a lot easier. I recommend installing it to `C:\MinGW`

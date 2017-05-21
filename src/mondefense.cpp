@@ -1,8 +1,12 @@
 #include "mondefense.h"
+
+#include "ballistics.h"
+#include "dispersion.h"
 #include "monster.h"
 #include "creature.h"
 #include "damage.h"
 #include "game.h"
+#include "projectile.h"
 #include "rng.h"
 #include "line.h"
 #include "bodypart.h"
@@ -11,6 +15,8 @@
 #include "translations.h"
 #include "field.h"
 #include "player.h"
+
+#include <algorithm>
 
 void mdefense::none( monster &, Creature *, const dealt_projectile_attack * )
 {
@@ -21,7 +27,7 @@ void mdefense::zapback( monster &m, Creature *const source,
 {
     // Not a melee attack, attacker lucked out or out of range
     if( source == nullptr || proj != nullptr ||
-        rng( 0, 100 ) > m.def_chance || rl_dist( m.pos(), source->pos() ) > 1 ) {
+        rl_dist( m.pos(), source->pos() ) > 1 ) {
         return;
     }
 
@@ -35,17 +41,18 @@ void mdefense::zapback( monster &m, Creature *const source,
         return;
     }
 
+    if( g->u.sees( source->pos() ) ) {
+        auto const msg_type = ( source == &g->u ) ? m_bad : m_info;
+        add_msg( msg_type, _( "Striking the %1$s shocks %2$s!" ),
+                 m.name().c_str(), source->disp_name().c_str() );
+    }
+
     damage_instance const shock {
         DT_ELECTRIC, static_cast<float>( rng( 1, 5 ) )
     };
     source->deal_damage( &m, bp_arm_l, shock );
     source->deal_damage( &m, bp_arm_r, shock );
 
-    if( g->u.sees( source->pos() ) ) {
-        auto const msg_type = ( source == &g->u ) ? m_bad : m_info;
-        add_msg( msg_type, _( "Striking the %1$s shocks %2$s!" ),
-                 m.name().c_str(), source->disp_name().c_str() );
-    }
     source->check_dead_state();
 }
 
@@ -64,7 +71,7 @@ void mdefense::acidsplash( monster &m, Creature *const source,
     size_t num_drops = rng( 4, 6 );
     player const *const foe = dynamic_cast<player *>( source );
     if( proj == nullptr && foe != nullptr ) {
-        if( foe->weapon.is_cutting_weapon() ) {
+        if( foe->weapon.is_melee( DT_CUT ) || foe->weapon.is_melee( DT_STAB ) ) {
             num_drops += rng( 3, 4 );
         }
 
@@ -98,7 +105,7 @@ void mdefense::acidsplash( monster &m, Creature *const source,
     prj.impact.add_damage( DT_ACID, rng( 1, 3 ) );
     for( size_t i = 0; i < num_drops; i++ ) {
         const tripoint &target = random_entry( pts );
-        m.projectile_attack( prj, target, 1200 );
+        projectile_attack( prj, m.pos(), target, { 1200 } );
     }
 
     if( g->u.sees( m.pos() ) ) {

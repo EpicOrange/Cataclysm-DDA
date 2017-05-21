@@ -10,6 +10,7 @@
       "CSC_WEAPON_RANGED",
       "CSC_WEAPON_EXPLOSIVE",
       "CSC_WEAPON_MODS",
+      "CSC_WEAPON_MAGAZINES",
       "CSC_WEAPON_OTHER"
     ]
   },{
@@ -17,7 +18,10 @@
     "id" : "CC_AMMO",
     "recipe_subcategories" : [
       "CSC_ALL",
-      "CSC_AMMO_BULLETS",
+      "CSC_AMMO_PISTOL",
+      "CSC_AMMO_RIFLE",
+      "CSC_AMMO_SHOT",
+      "CSC_AMMO_GRENADES",
       "CSC_AMMO_ARROWS",
       "CSC_AMMO_COMPONENTS",
       "CSC_AMMO_OTHER"
@@ -88,12 +92,6 @@
       "CSC_OTHER_TRAPS",
       "CSC_OTHER_VEHICLE",
       "CSC_OTHER_OTHER"
-    ]
-  },{
-    "type" : "recipe_category",
-    "id" : "CC_NONCRAFT",
-    "recipe_subcategories" : [
-      "CSC_NONCRAFT"
     ]
   }
 ]

@@ -1,3 +1,4 @@
+#pragma once
 #ifndef NAME_H
 #define NAME_H
 
@@ -19,6 +20,7 @@ typedef enum {
 
 class NameGenerator;
 class JsonObject;
+class JsonIn;
 
 class Name
 {
@@ -53,6 +55,7 @@ class NameGenerator
         }
 
         void load_name( JsonObject &jo );
+        void load( JsonIn &jsin );
 
         std::string generateName( bool male );
 

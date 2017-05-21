@@ -1,7 +1,8 @@
+#pragma once
 #ifndef ADVANCED_INV_H
 #define ADVANCED_INV_H
 
-#include "output.h"
+#include "cursesdef.h" // WINDOW
 #include "enums.h"
 
 #include <string>
@@ -39,7 +40,8 @@ enum advanced_inv_sortby {
     SORTBY_VOLUME,
     SORTBY_CHARGES,
     SORTBY_CATEGORY,
-    SORTBY_DAMAGE
+    SORTBY_DAMAGE,
+    SORTBY_SPOILAGE
 };
 
 struct sort_case_insensitive_less : public std::binary_function< char, char, bool > {
@@ -47,6 +49,12 @@ struct sort_case_insensitive_less : public std::binary_function< char, char, boo
         return toupper( static_cast< unsigned char >( x ) ) < toupper( static_cast< unsigned char >( y ) );
     }
 };
+
+/**
+ * Cancels ongoing move all action.
+ * @todo Make this not needed.
+ */
+void cancel_aim_processing();
 
 struct advanced_inv_listitem;
 
@@ -77,21 +85,22 @@ struct advanced_inv_area {
     // flags, e.g. FIRE, TRAP, WATER
     std::string flags;
     // total volume and weight of items currently there
-    int volume, weight;
+    units::volume volume;
+    int weight;
     // maximal count / volume of items there.
-    int max_size, max_volume;
+    int max_size;
 
     advanced_inv_area( aim_location id ) : id( id ) {}
     advanced_inv_area( aim_location id, int hscreenx, int hscreeny, tripoint off, std::string name,
                        std::string shortname ) : id( id ), hscreenx( hscreenx ),
         hscreeny( hscreeny ), off( off ), name( name ), shortname( shortname ), pos( 0, 0, 0 ),
         canputitemsloc( false ), veh( nullptr ), vstor( -1 ), volume( 0 ), weight( 0 ),
-        max_size( 0 ), max_volume( 0 ) {
+        max_size( 0 ) {
     }
 
     void init();
     // if you want vehicle cargo, specify so via `in_vehicle'
-    int free_volume( bool in_vehicle = false ) const;
+    units::volume free_volume( bool in_vehicle = false ) const;
     int get_item_count() const;
     // Other area is actually the same item source, e.g. dragged vehicle to the south and AIM_SOUTH
     bool is_same( const advanced_inv_area &other ) const;
@@ -155,7 +164,7 @@ struct advanced_inv_listitem {
     /**
      * The volume of all the items in this stack, used for sorting.
      */
-    int volume;
+    units::volume volume;
     /**
      * The weight of all the items in this stack, used for sorting.
      */
@@ -173,9 +182,8 @@ struct advanced_inv_listitem {
      * to an item, only @ref cat is valid.
      */
     bool is_category_header() const;
-    /**
-     * Whether this is an item entry (where @ref it is a valid pointer).
-     */
+
+    /** Returns true if this is an item entry */
     bool is_item_entry() const;
     /**
      * Create a category header entry.
@@ -188,19 +196,19 @@ struct advanced_inv_listitem {
     advanced_inv_listitem();
     /**
      * Create a normal item entry.
-     * @param an_item The item pointer, stored in @ref it. Must not be null.
-     * @param index The index, stored in @ref idx.
-     * @param count The stack size, stored in @ref stacks.
-     * @param area The source area, stored in @ref area. Must not be AIM_ALL.
+     * @param an_item The item pointer. Must not be null.
+     * @param index The index
+     * @param count The stack size
+     * @param area The source area. Must not be AIM_ALL.
      * @param from_vehicle Is the item from a vehicle cargo space?
      */
     advanced_inv_listitem( item *an_item, int index, int count,
                            aim_location area, bool from_vehicle );
     /**
      * Create a normal item entry.
-     * @param items The list of item pointers, stored in @ref it.
-     * @param index The index, stored in @ref idx.
-     * @param area The source area, stored in @ref area. Must not be AIM_ALL.
+     * @param items The list of item pointers.
+     * @param index The index
+     * @param area The source area. Must not be AIM_ALL.
      * @param from_vehicle Is the item from a vehicle cargo space?
      */
     advanced_inv_listitem( const std::list<item *> &items, int index,
@@ -306,7 +314,7 @@ class advanced_inventory_pane
         /** Only add offset to index, but wrap around! */
         void mod_index( int offset );
 
-        mutable std::map<std::string, bool> filtercache;
+        mutable std::map<std::string, std::function<bool( const item & )>> filtercache;
 };
 
 class advanced_inventory
@@ -318,7 +326,7 @@ class advanced_inventory
         void display();
     private:
         /**
-         * Refers to the two panels, used as index into @ref panels.
+         * Refers to the two panes, used as index into @ref panes.
          */
         enum side {
             left  = 0,
@@ -399,6 +407,7 @@ class advanced_inventory
         void init();
         /**
          * Translate an action ident from the input context to an aim_location.
+         * @param action Action ident to translate
          * @param ret If the action ident referred to a location, its id is stored
          * here. Only valid when the function returns true.
          * @return true if the action did refer to an location (which has been
@@ -437,14 +446,15 @@ class advanced_inventory
         int remove_item( advanced_inv_listitem &sitem, int count = 1 );
         /**
          * Move content of source container into destination container (destination pane = AIM_CONTAINER)
-         * @param src_container Source container
-         * @param dest_container Destination container
+         * @param src Source container
+         * @param dest Destination container
          */
         bool move_content( item &src, item &dest );
         /**
          * Setup how many items/charges (if counted by charges) should be moved.
          * @param destarea Where to move to. This must not be AIM_ALL.
          * @param sitem The source item, it must contain a valid reference to an item!
+         * @param action The action we are querying
          * @param amount The input value is ignored, contains the amount that should
          *      be moved. Only valid if this returns true.
          * @return false if nothing should/can be moved. True only if there can and

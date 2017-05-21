@@ -1,3 +1,4 @@
+#pragma once
 #ifndef START_LOCATION_H
 #define START_LOCATION_H
 
@@ -27,7 +28,7 @@ class start_location
         std::string target() const;
         const std::set<std::string> &flags() const;
 
-        static void load_location( JsonObject &jsonobj );
+        static void load_location( JsonObject &jo, const std::string &src );
         static void reset();
 
         static const std::vector<start_location> &get_all();
@@ -51,6 +52,7 @@ class start_location
         /**
          * Burn random terrain / furniture with FLAMMABLE or FLAMMABLE_ASH tag.
          * Doors and windows are excluded.
+         * @param omtstart Global overmap terrain coordinates where the player is to be spawned.
          * @param rad safe radius area to prevent player spawn next to burning wall.
          * @param count number of fire on the map.
          */
@@ -70,7 +72,7 @@ class start_location
         std::string _target;
         std::set<std::string> _flags;
 
-        void load( JsonObject &jo );
+        void load( JsonObject &jo, const std::string &src );
 
         void prepare_map( tinymap &m ) const;
 };

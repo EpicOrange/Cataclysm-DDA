@@ -1,5 +1,4 @@
 #include <map>
-#include <fstream>
 #include <sstream>
 
 #include "json.h"
@@ -7,6 +6,7 @@
 #include "output.h"
 #include "translations.h"
 #include "rng.h"
+#include "cata_utility.h"
 
 NameGenerator::NameGenerator()
 {
@@ -26,22 +26,16 @@ void NameGenerator::load_name( JsonObject &jo )
 
     if( usage == "given" ) {
         type |= nameIsGivenName;
-        name = pgettext( "Given Name", name.c_str() );
     } else if( usage == "family" ) {
         type |= nameIsFamilyName;
-        name = pgettext( "Family Name", name.c_str() );
     } else if( usage == "universal" ) {
         type |= nameIsGivenName | nameIsFamilyName;
-        name = pgettext( "Either Name", name.c_str() );
     } else if( usage == "backer" ) {
         type |= nameIsFullName;
-        name = pgettext( "Full Name", name.c_str() );
     } else if( usage == "city" ) {
         type |= nameIsTownName;
-        name = pgettext( "City Name", name.c_str() );
     } else if( usage == "world" ) {
         type |= nameIsWorldName;
-        name = pgettext( "World Name", name.c_str() );
     }
 
     // Gender is optional
@@ -57,10 +51,8 @@ void NameGenerator::load_name( JsonObject &jo )
         }
     }
 
-    Name aName( name, type );
-
     // Add the name to the appropriate bucket
-    names[type].push_back( aName );
+    names[type].push_back( Name( name, type ) );
 }
 
 // Find all name types satisfying the search flags.
@@ -154,30 +146,18 @@ Name::Name( std::string name, uint32_t type )
     _type = type;
 }
 
-void load_names_from_file( const std::string &filename )
+void NameGenerator::load( JsonIn &jsin )
 {
-    std::ifstream data_file;
-    data_file.open( filename.c_str(), std::ifstream::in | std::ifstream::binary );
-    if( !data_file.good() ) {
-        throw std::runtime_error( std::string( "Could not read " ) + filename );
-    }
-
-    NameGenerator &gen = NameGenerator::generator();
-
-    std::istringstream iss(
-        std::string(
-            ( std::istreambuf_iterator<char>( data_file ) ),
-            std::istreambuf_iterator<char>()
-        )
-    );
-    JsonIn jsin( iss );
-    data_file.close();
-
-    // load em all
     jsin.start_array();
     while( !jsin.end_array() ) {
         JsonObject json_name = jsin.get_object();
-        gen.load_name( json_name );
+        load_name( json_name );
     }
+}
+
+void load_names_from_file( const std::string &filename )
+{
+    using namespace std::placeholders;
+    read_from_file_json( filename, std::bind( &NameGenerator::load, &NameGenerator::generator(), _1 ) );
 }
 

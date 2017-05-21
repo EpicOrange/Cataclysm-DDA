@@ -1,3 +1,4 @@
+#pragma once
 #ifndef DEPENDENCY_TREE_H
 #define DEPENDENCY_TREE_H
 
@@ -7,6 +8,7 @@
 #include <string>
 #include <sstream>
 #include <algorithm>
+#include <memory>
 
 enum NODE_ERROR_TYPE {
     DEPENDENCY,
@@ -72,7 +74,7 @@ class dependency_tree
         bool is_available( std::string key );
         dependency_node *get_node( std::string key );
 
-        std::map<std::string, dependency_node *> master_node_map;
+        std::map<std::string, std::unique_ptr<dependency_node>> master_node_map;
     protected:
     private:
         // Don't need to be called directly. Only reason to call these are during initialization phase.

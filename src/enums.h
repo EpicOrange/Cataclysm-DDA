@@ -1,8 +1,10 @@
+#pragma once
 #ifndef ENUMS_H
 #define ENUMS_H
 
 #include <climits>
 #include <cassert>
+#include <ostream>
 
 #include "json.h" // (de)serialization for points
 
@@ -75,6 +77,13 @@ namespace std{
         }
     };
 }
+
+//Used for autopickup and safemode rules
+enum rule_state : int {
+    RULE_NONE,
+    RULE_WHITELISTED,
+    RULE_BLACKLISTED
+};
 
 enum visibility_type {
   VIS_HIDDEN,
@@ -160,7 +169,7 @@ enum artifact_natural_property {
     ARTPROP_MAX
 };
 
-enum phase_id {
+enum phase_id : int {
     PNULL, SOLID, LIQUID, GAS, PLASMA
 };
 
@@ -191,7 +200,7 @@ struct point : public JsonSerializer, public JsonDeserializer {
     point(const point &) = default;
     point &operator=(point &&) = default;
     point &operator=(const point &) = default;
-    ~point() {}
+    ~point() override {}
     using JsonSerializer::serialize;
     void serialize(JsonOut &jsout) const override
     {
@@ -265,7 +274,7 @@ struct tripoint : public JsonSerializer, public JsonDeserializer {
     tripoint &operator=(tripoint &&) = default;
     tripoint &operator=(const tripoint &) = default;
     explicit tripoint(const point &p, int Z) : x (p.x), y (p.y), z (Z) {}
-    ~tripoint() {}
+    ~tripoint() override {}
     using JsonSerializer::serialize;
     void serialize(JsonOut &jsout) const override
     {
@@ -323,7 +332,19 @@ struct tripoint : public JsonSerializer, public JsonDeserializer {
         y -= rhs.y;
         return *this;
     }
+    tripoint &operator-=( const tripoint &rhs )
+    {
+        x -= rhs.x;
+        y -= rhs.y;
+        z -= rhs.z;
+        return *this;
+    }
 };
+
+inline std::ostream &operator<<( std::ostream &os, const tripoint &pos )
+{
+    return os << pos.x << "," << pos.y << "," << pos.z;
+}
 
 // Make tripoint hashable so it can be used as an unordered_set or unordered_map key,
 // or a component of one.

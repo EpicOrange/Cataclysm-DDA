@@ -1,7 +1,10 @@
+#pragma once
 #ifndef SPEECH_H
 #define SPEECH_H
 
-#include "json.h"
+#include <string>
+
+class JsonObject;
 
 struct SpeechBubble {
     std::string text;

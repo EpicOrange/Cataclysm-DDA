@@ -1,3 +1,4 @@
+#pragma once
 #ifndef WEATHER_H
 #define WEATHER_H
 
@@ -120,8 +121,8 @@ struct weather_sum {
     float sunlight = 0.0f;
 };
 
-std::string const &season_name( int season );
-std::string const &season_name_upper( int season );
+const std::string season_name( int season );
+const std::string season_name_upper( int season );
 weather_datum const &weather_data( weather_type type );
 
 std::string weather_forecast( point const &abs_sm_pos );

@@ -1,3 +1,4 @@
+#pragma once
 #ifndef MOD_MANAGER_H
 #define MOD_MANAGER_H
 
@@ -9,6 +10,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <memory>
 
 const std::vector<std::pair<std::string, std::string> > &get_mod_list_categories();
 
@@ -23,38 +25,40 @@ const std::vector<std::pair<std::string, std::string> > &get_mod_list_categories
 const std::vector<std::pair<std::string, std::string> > &get_mod_list_tabs();
 const std::map<std::string, std::string> &get_mod_list_cat_tab();
 
-enum mod_type {
-    MT_CORE,
-    MT_SUPPLEMENTAL
-};
 struct MOD_INFORMATION {
-    std::string path;
     std::string name;
     std::string ident;
-    std::vector<std::string> authors;
+
+    /** Directory to load JSON and Lua from relative to directory containing modinfo.json */
+    std::string path;
+
+    /** If set load legacy migrations from this location dependent upon save version */
+    std::string legacy;
+
+    /** All authors who have added content to the mod (excluding maintenance changes) */
+    std::set<std::string> authors;
+
+    /**
+     *  Assigned maintainers responsible for maintaining compatibility with core
+     *  @note these should be verbatim GH account names
+     */
+    std::set<std::string> maintainers;
+
     std::string description;
-    mod_type _type;
-    std::vector<std::string> dependencies;
-    bool obsolete;
-    /** Mod require Lua support **/
-    bool need_lua;
 
-    std::pair<int, std::string> category;
+    /** What other mods must be loaded prior to this one? */
+    std::set<std::string> dependencies;
 
-    MOD_INFORMATION() : _type( MT_SUPPLEMENTAL ), obsolete( false ), category( {
-        -1, ""
-    } ) {};
+    /** Core mods are loaded before any other mods */
+    bool core = false;
 
-    std::string type() {
-        switch( _type ) {
-            case MT_CORE:
-                return "CORE";
-                break;
-            case MT_SUPPLEMENTAL:
-                return "SUPPLEMENTAL";
-                break;
-        }
-    };
+    /** Obsolete mods are loaded for legacy saves but cannot be used when starting new worlds */
+    bool obsolete = false;
+
+    /** Does this mod require Lua support? **/
+    bool need_lua() const;
+
+    std::pair<int, std::string> category = { -1, "" };
 };
 
 class mod_manager
@@ -136,7 +140,7 @@ class mod_manager
          * @throws std::string on all kind of errors. The string
          * contains the error message.
          */
-        void load_modfile( JsonObject &jo, const std::string &main_path );
+        void load_modfile( JsonObject &jo, const std::string &path );
 
         bool set_default_mods( const std::string &ident );
         void remove_mod( const std::string &ident );
@@ -144,7 +148,7 @@ class mod_manager
 
         dependency_tree tree;
 
-        typedef std::map<std::string, MOD_INFORMATION *> t_mod_map;
+        typedef std::map<std::string, std::unique_ptr<MOD_INFORMATION>> t_mod_map;
         /**
          * The map of known mod, key is the mod ident. Values are
          * never NULL.

@@ -1,3 +1,4 @@
+#pragma once
 #ifndef CATACURSE_H
 #define CATACURSE_H
 
@@ -12,22 +13,16 @@
 #include <string>
 #include <cstdint>
 
+#include "printf_check.h"
+
 typedef int chtype;
 typedef unsigned short attr_t;
 
 //a pair of colors[] indexes, foreground and background
 typedef struct {
-    int FG;//foreground index in colors[]
-    int BG;//foreground index in colors[]
+    int FG;
+    int BG;
 } pairs;
-
-//The curse character struct, just a char, attribute, and color pair
-//typedef struct
-//{
-// char character;//the ascii actual character
-// int attrib;//attributes, mostly for A_BLINK and A_BOLD
-// pairs color;//pair of foreground/background, indexed into colors[]
-//} cursechar;
 
 //Individual lines, so that we can track changed lines
 struct cursecell {
@@ -52,14 +47,14 @@ struct curseline {
 struct WINDOW {
     int x;//left side of window
     int y;//top side of window
-    int width;//width of the curses window
-    int height;//height of the curses window
+    int width;
+    int height;
     int FG;//current foreground color from attron
     int BG;//current background color from attron
     bool inuse;// Does this window actually exist?
     bool draw;//Tracks if the window text has been changed
-    int cursorx;//x location of the cursor
-    int cursory;//y location of the cursor
+    int cursorx;
+    int cursory;
     std::vector<curseline> line;
 };
 
@@ -77,17 +72,16 @@ struct WINDOW {
 #define A_CHARTEXT 0x000000ff /* bits for 8-bit characters          <---------not used */
 #define A_COLOR  0x03fe0000 /* Color bits */
 
-#define COLOR_BLACK 0x00        //RGB{0,0,0}
-#define COLOR_RED 0x01        //RGB{196, 0, 0}
-#define COLOR_GREEN 0x02        //RGB{0,196,0}
-#define COLOR_YELLOW 0x03    //RGB{196,180,30}
-#define COLOR_BLUE 0x04        //RGB{0, 0, 196}
-#define COLOR_MAGENTA 0x05    //RGB{196, 0, 180}
-#define COLOR_CYAN 0x06        //RGB{0, 170, 200}
-#define COLOR_WHITE 0x07        //RGB{196, 196, 196}
+#define COLOR_BLACK 0x00    // RGB{0, 0, 0}
+#define COLOR_RED 0x01      // RGB{196, 0, 0}
+#define COLOR_GREEN 0x02    // RGB{0, 196, 0}
+#define COLOR_YELLOW 0x03   // RGB{196, 180, 30}
+#define COLOR_BLUE 0x04     // RGB{0, 0, 196}
+#define COLOR_MAGENTA 0x05  // RGB{196, 0, 180}
+#define COLOR_CYAN 0x06     // RGB{0, 170, 200}
+#define COLOR_WHITE 0x07    // RGB{196, 196, 196}
 
 #define COLOR_PAIR(n) ((static_cast<std::uint32_t>(n) << 17) & A_COLOR)
-//#define PAIR_NUMBER(n) ((((u_int32_t)n) & A_COLOR) >> 17)
 
 #define    KEY_MIN        0x101    /* minimum extended key value */ //<---------not used
 #define    KEY_BREAK      0x101    /* break key */                  //<---------not used
@@ -136,20 +130,19 @@ int getch( void );
 int wgetch( WINDOW *win );
 int mvgetch( int y, int x );
 int mvwgetch( WINDOW *win, int y, int x );
-int mvwprintw( WINDOW *win, int y, int x, const char *fmt, ... );
-int mvprintw( int y, int x, const char *fmt, ... );
+int mvwprintw( WINDOW *win, int y, int x, const char *fmt, ... ) PRINTF_LIKE( 4, 5 );
+int mvprintw( int y, int x, const char *fmt, ... ) PRINTF_LIKE( 3, 4 );
 int werase( WINDOW *win );
 int start_color( void );
 int init_pair( short pair, short f, short b );
 int wmove( WINDOW *win, int y, int x );
-int getnstr( char *str, int size );
 int clear( void );
 int clearok( WINDOW *win );
 int erase( void );
 int endwin( void );
 int mvwaddch( WINDOW *win, int y, int x, const chtype ch );
 int wclear( WINDOW *win );
-int wprintw( WINDOW *win, const char *fmt, ... );
+int wprintw( WINDOW *win, const char *fmt, ... ) PRINTF_LIKE( 2, 3 );
 WINDOW *initscr( void );
 int cbreak( void ); //PORTABILITY, DUMMY FUNCTION
 int keypad( WINDOW *faux, bool bf ); //PORTABILITY, DUMMY FUNCTION
@@ -160,7 +153,7 @@ int wattroff( WINDOW *win, int attrs );
 int attron( int attrs );
 int attroff( int attrs );
 int waddch( WINDOW *win, const chtype ch );
-int printw( const char *fmt, ... );
+int printw( const char *fmt, ... ) PRINTF_LIKE( 1, 2 );
 int getmaxx( WINDOW *win );
 int getmaxy( WINDOW *win );
 int getbegx( WINDOW *win );
@@ -168,13 +161,12 @@ int getbegy( WINDOW *win );
 int getcurx( WINDOW *win );
 int getcury( WINDOW *win );
 int move( int y, int x );
-void timeout( int delay ); //PORTABILITY, DUMMY FUNCTION
 void set_escdelay( int delay ); //PORTABILITY, DUMMY FUNCTION
 int echo( void );
 int noecho( void );
 //non-curses functions, Do not call these in the main game code
 extern WINDOW *mainwin;
-extern pairs *colorpairs;
+extern std::array<pairs, 100> colorpairs;
 // key is a color name from main_color_names,
 // value is a color in *BGR*. each vector has exactly 3 values.
 // see load_colors(Json...)
@@ -186,8 +178,6 @@ WINDOW *curses_init();
 int curses_destroy();
 void curses_drawwindow( WINDOW *win );
 void curses_delay( int delay );
-void curses_timeout( int t );
-int curses_getch( WINDOW *win );
 // may throw std::exception
 int curses_start_color();
 

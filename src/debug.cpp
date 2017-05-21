@@ -2,6 +2,7 @@
 #include "path_info.h"
 #include "output.h"
 #include "filesystem.h"
+#include "input.h"
 #include <time.h>
 #include <cassert>
 #include <cstdlib>
@@ -32,7 +33,11 @@ static int debugLevel = D_ERROR;
 static int debugClass = D_MAIN;
 #endif
 
-bool debug_fatal = false;
+extern bool test_mode;
+
+/** When in @ref test_mode will be set if any debugmsg are emitted */
+bool test_dirty = false;
+
 bool debug_mode = false;
 
 namespace
@@ -54,9 +59,10 @@ void realDebugmsg( const char *filename, const char *line, const char *funcname,
     const std::string text = vstring_format( mes, ap );
     va_end( ap );
 
-    if( debug_fatal ) {
-        throw std::runtime_error( string_format( "%s:%s [%s] %s", filename, line, funcname,
-                                  text.c_str() ) );
+    if( test_mode ) {
+        test_dirty = true;
+        std::cerr << filename << ":" << line << " [" << funcname << "] " << text << std::endl;
+        return;
     }
 
     DebugLog( D_ERROR, D_MAIN ) << filename << ":" << line << " [" << funcname << "] " << text;
@@ -66,6 +72,11 @@ void realDebugmsg( const char *filename, const char *line, const char *funcname,
 
     if( ignored_messages.count( msg_key ) > 0 ) {
         return;
+    }
+
+    if( stdscr == nullptr ) {
+        std::cerr << text.c_str() << std::endl;
+        abort();
     }
 
     fold_and_print( stdscr, 0, 0, getmaxx( stdscr ), c_ltred,
@@ -79,7 +90,7 @@ void realDebugmsg( const char *filename, const char *line, const char *funcname,
                     text.c_str(), funcname, filename, line );
 
     for( bool stop = false; !stop; ) {
-        switch( getch() ) {
+        switch( inp_mngr.get_input_event().get_first_input() ) {
             case 'i':
             case 'I':
                 ignored_messages.insert( msg_key );

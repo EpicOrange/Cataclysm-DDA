@@ -35,41 +35,31 @@ weather_animation_t get_weather_animation(weather_type const type)
     return {0.0f, c_white, '?'};
 }
 
-std::string const& season_name(int const season)
+const std::string season_name(int const season)
 {
-    static std::string const invalid {"bad season!"};
-    static std::array<std::string, 4> const names {{
-        pgettext( "season_name", "spring" ),
-        pgettext( "season_name", "summer" ),
-        pgettext( "season_name", "autumn" ),
-        pgettext( "season_name", "winter" )
-    }};
-
-    if (!(season >= 0 && season < 4)) {
-        return invalid;
+    switch( season ) {
+        case 0:
+            return pgettext( "season_name", "spring" );
+        case 1:
+            return pgettext( "season_name", "summer" );
+        case 2:
+            return pgettext( "season_name", "autumn" );
+        case 3:
+            return pgettext( "season_name", "winter" );
+        default:
+            return "bad season!";
     }
-
-    return names[season];
 }
 
-std::string const& season_name_upper(int const season)
+const std::string season_name_upper(int const season)
 {
-    static auto const as_upper = [](std::string const& s) {
-        std::string result {s};
-        result[0] = toupper(result[0]);
-        return result;
-    };
-
-    static std::array<std::string, 4> const names {{
-        as_upper(season_name(0)), as_upper(season_name(1)),
-        as_upper(season_name(2)), as_upper(season_name(3))
-    }};
-
     if (!(season >= 0 && season < 4)) {
         return season_name(season);
     }
 
-    return names[static_cast<size_t>(season)];
+    std::string name = season_name( season );
+    name[0] = toupper( name[0] );
+    return name;
 }
 
 weather_datum const& weather_data(weather_type const type)
@@ -83,19 +73,19 @@ weather_datum const& weather_data(weather_type const type)
     static std::array<weather_datum, NUM_WEATHER_TYPES> const data {{
         weather_datum {
             "NULL Weather - BUG (weather_data.cpp:weather_data)", c_magenta,
-            0, 0.f, 0, 0, false,
+            0, 0.0f, 0, 0, false,
             &weather_effect::none
         },
         weather_datum {
-            _("Clear"), c_cyan, 0, 1.f, 0, 0, false,
+            _("Clear"), c_cyan, 0, 1.0f, 0, 0, false,
             &weather_effect::none
         },
         weather_datum {
-            _("Sunny"), c_ltcyan, 0, 1.f, 2, 0, false,
+            _("Sunny"), c_ltcyan, 0, 1.0f, 2, 0, false,
             &weather_effect::glare
         },
         weather_datum {
-            _("Cloudy"), c_ltgray, 0, 1.f, -20, 0, false,
+            _("Cloudy"), c_ltgray, 0, 1.0f, -20, 0, false,
             &weather_effect::none
         },
         weather_datum {

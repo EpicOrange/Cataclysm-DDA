@@ -87,6 +87,7 @@
         "id": "catch_up",
         "name": ["Catch Up"],
         "desc": ["AI tag for telling NPCs to catch up.  This is a bug if you have it."],
+        "int_add_val": 1,
         "max_intensity": 15
     },
     {
@@ -228,10 +229,12 @@
         "name": ["On Fire"],
         "desc": ["Loss of health - Entire Body\nYour clothing and other equipment may be consumed by the flames."],
         "remove_memorial_log": "Put out the fire.",
-        "apply_message": "You're on fire!",
+        "apply_message": "You're on fire!  Wait in place to attempt to put out the fire.",
         "apply_memorial_log": "Caught on fire.",
         "rating": "bad",
-        "max_duration": 10
+        "max_intensity": 3,
+        "int_dur_factor": 5,
+        "max_duration": 50
     },
     {
         "type": "effect_type",
@@ -382,6 +385,20 @@
         "scaling_mods": {
             "dex_mod": [-0.34, -0.17],
             "speed_mod": [-5, -3]
+        }
+    },
+    {
+        "type": "effect_type",
+        "id": "nausea",
+        "name" : ["Nausea"],
+        "desc": ["You feel nauseous.  Even a thought of food makes you feel sick."],
+        "remove_message": "You no longer feel nauseous.",
+        "rating": "bad",
+        "int_dur_factor": 300,
+        "max_intensity": 3,
+        "max_duration": 900,
+        "base_mods": {
+            "vomit_chance": [60]
         }
     },
     {
@@ -585,6 +602,7 @@
         "main_parts_only": true,
         "rating": "bad",
         "int_dur_factor": 1800,
+        "max_intensity": 2,
         "scaling_mods": {
             "dex_mod": [-1, 0],
             "pain_chance_bot": [200],
@@ -609,6 +627,7 @@
         "main_parts_only": true,
         "rating": "bad",
         "int_dur_factor": 4800,
+        "max_intensity": 3,
         "base_mods": {
             "pain_chance": [2, 1],
             "pain_chance_bot": [200],
@@ -681,6 +700,7 @@
         "apply_memorial_log": "Contracted a fungal infection.",
         "remove_memorial_log": "Cured the fungal infection.",
         "miss_messages": [["You feel sick inside.", 1]],
+        "speed_name": "Fungal infection",
         "rating": "bad",
         "max_intensity": 3,
         "resist_traits": ["POISRESIST"],
@@ -694,7 +714,13 @@
         "type": "effect_type",
         "id": "visuals",
         "name": ["Hallucinating"],
-        "desc": ["You can't trust everything that you see."]
+        "desc": ["You can't trust everything that you see."],
+        "rating": "bad",
+        "base_mods": {
+            "int_mod": [-2],
+            "dex_mod": [-1],
+            "per_mod": [-4]
+        }
     },
     {
         "type": "effect_type",
@@ -776,7 +802,8 @@
     },
     {
         "type": "effect_type",
-        "id": "hallu"
+        "id": "hallu",
+        "max_duration": 3600
     },
     {
         "type": "effect_type",
@@ -860,6 +887,7 @@
         "part_descs": true,
         "speed_name": "Frostbite",
         "dur_add_perc": 0,
+        "max_intensity": 2,
         "scaling_mods": {
             "speed_mod": [-5]
         }
@@ -1195,20 +1223,6 @@
     },
     {
         "type": "effect_type",
-        "id": "grack",
-        "name": ["Grack"],
-        "desc": ["Unleashed the Gracken."],
-        "apply_message": "RELEASE THE GRACKEN!!!!",
-        "base_mods": {
-            "speed_mod": [20000],
-            "str_mod": [400],
-            "dex_mod": [400],
-            "int_mod": [400],
-            "per_mod": [400]
-        }
-    },
-    {
-        "type": "effect_type",
         "id": "teleglow"
     },
     {
@@ -1225,7 +1239,7 @@
         "type": "effect_type",
         "id": "weed_high",
         "apply_message": "You feel lightheaded.",
-        "miss_messages": [["That critter's jumping around like a jitterbug! It needs to mellow out.", 1]],
+        "miss_messages": [["That critter's jumping around like a jitterbug!  It needs to mellow out.", 1]],
         "base_mods": {
             "str_mod": [-1],
             "dex_mod": [-1],
@@ -1341,7 +1355,7 @@
         "type": "effect_type",
         "id": "relax_gas",
         "name": ["Relaxation gas"],
-        "desc": ["Strength - 3;   Dexterity - 3;   Intelligence - 2;   Perception - 4\nYou are thoroughly relaxed and don't feel like moving.  Fighting? Too much effort."],
+        "desc": ["Strength - 3;   Dexterity - 3;   Intelligence - 2;   Perception - 4\nYou are thoroughly relaxed and don't feel like moving.  Fighting?  Too much effort."],
         "apply_message": "You inhale sweetish gas.",
         "remove_message": "The slackness leaves your muscles.",
         "rating": "bad",
@@ -1524,47 +1538,72 @@
     },
     {
         "type": "effect_type",
-        "id": "brittlebone",
-        "name": [ "Brittle bones" ],
-        "desc": [ "A lack of calcium in your diet has made your bones brittle." ],
-        "apply_message": "Your bones have become brittle.",
+        "id": "hypocalcemia",
+        "name": [ "Hypocalcemia", "Weak bones", "Brittle bones" ],
+        "desc": [ "A lack of calcium in your diet will make your bones progressively weaker." ],
+        "apply_message": "Your bones are becoming more brittle.",
         "remove_message": "Your bones regain their usual strength.",
+        "decay_messages": [
+          [ "Your calcium deficiency is nearly resolved.", "good" ],
+          [ "Your bones become stronger as your calcium deficiency improves.", "good" ]
+        ],
+        "max_intensity": 3,
         "rating": "bad"
     },
     {
         "type": "effect_type",
         "id": "anemia",
-        "name": [ "Anemia" ],
-        "desc": [ "A lack of iron in your diet has made you anemic." ],
-        "apply_message": "You feel tired and listless.",
+        "name": [ "Iron deficiency", "Early anemia", "Anemia" ],
+        "desc": [ "A lack of iron in your diet will result in progressively worsening anemia." ],
+        "apply_message": "You begin feeling increasingly tired and listless.",
         "remove_message": "You no longer feel anemic.",
+        "decay_messages": [
+          [ "Your iron deficiency is nearly resolved.", "good" ],
+          [ "Your feel stronger as your anemia starts to improve.", "good" ]
+        ],
+        "max_intensity": 3,
         "rating": "bad"
     },
     {
         "type": "effect_type",
-        "id": "nightblind",
-        "name": [ "Night blindness" ],
-        "desc": [ "A lack of vitamin A in your diet has affected your vision." ],
-        "apply_message": "You struggle to make out the finer details.",
-        "remove_message": "Your normal visual accuity returns.",
+        "id": "hypovitA",
+        "name": [ "VitA deficiency", "Poor vision", "Night blindness" ],
+        "desc": [ "A lack of vitamin A in your diet will progressively worsen your vision." ],
+        "apply_message": "You start struggling to make out the finer details.",
+        "remove_message": "Your normal visual acuity returns.",
+        "decay_messages": [
+          [ "Your vitamin A deficiency is nearly resolved.", "good" ],
+          [ "Your vision improves as your Vitamin A deficiency improves.", "good" ]
+        ],
+        "max_intensity": 3,
         "rating": "bad"
     },
     {
         "type": "effect_type",
-        "id": "slowheal",
-        "name": [ "Slow healing" ],
-        "desc": [ "A lack of vitamin B12 in your diet has affected your ability to heal." ],
-        "apply_message": "Simple wounds concern you more than usual.",
+        "id": "hypovitB",
+        "name": [ "B12 deficiency", "Slow healing", "No healing" ],
+        "desc": [ "A lack of vitamin B12 in your diet will affect your ability to heal." ],
+        "apply_message": "Simple wounds are starting to concern you more than usual.",
         "remove_message": "Your wounds now heal normally.",
+        "decay_messages": [
+          [ "Your vitamin B12 deficiency is starting to resolve.", "good" ],
+          [ "Your ability to heal returns as your Vitamin B12 deficiency improves.", "good" ]
+        ],
+        "max_intensity": 3,
         "rating": "bad"
     },
     {
         "type": "effect_type",
         "id": "scurvy",
-        "name": [ "Scurvy" ],
-        "desc": [ "A lack of vitamin C in your diet has resulted in you developing scurvy." ],
-        "apply_message": "You have contracted scurvy.",
+        "name": [ "Early scurvy", "Scurvy", "Bad Scurvy" ],
+        "desc": [ "A lack of vitamin C in your diet will result in progressively worse symptoms of scurvy." ],
+        "apply_message": "You start to develop symptoms of scurvy.",
         "remove_message": "Your scurvy has resolved.",
+        "decay_messages": [
+          [ "Your vitamin C deficiency is starting to resolve.", "good" ],
+          [ "Your scurvy lessens as your Vitamin C deficiency improves.", "good" ]
+        ],
+        "max_intensity": 3,
         "rating": "bad"
     },
     {
@@ -1574,6 +1613,40 @@
         "desc": [ "An excess of vitamins has badly affected your metabolism." ],
         "apply_message": "Your metabolism becomes unstable.",
         "remove_message": "Your metabolism becomes more stable.",
+        "rating": "bad"
+    },
+    {
+        "type": "effect_type",
+        "id": "cough_suppress"
+    },
+    {
+        "type": "effect_type",
+        "id": "haslight",
+        "name": [ "Lit up" ],
+        "desc": [ "You are carrying a light and can't hide well." ],
+        "max_duration": 1,
+        "rating": "bad"
+    },
+    {
+        "type": "effect_type",
+        "id": "mending",
+        "name": [ "Started recovery", "Recovering", "Mostly recovered" ],
+        "desc": [ "This damaged limb is slowly regaining its functions." ],
+        "//": "Duration is 10 days, but the actual time taken is probabilistic.",
+        "max_duration": 144000,
+        "int_dur_factor": 36000,
+        "max_intensity": 3,
+        "rating": "good"
+    },
+    {
+        "type": "effect_type",
+        "id": "disabled",
+        "name": [ "Disabled" ],
+        "desc": [ "This limb is damaged beyond use and may require a splint to recover." ],
+        "//": "This sounds weird. We need <bp_affected> tag or something",
+        "apply_message": "Your limb breaks!",
+        "remove_message": "The broken limb has mended.",
+        "max_duration": 2,
         "rating": "bad"
     }
 ]

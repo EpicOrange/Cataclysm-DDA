@@ -1,3 +1,4 @@
+#pragma once
 #ifndef MONDEATH_H
 #define MONDEATH_H
 
@@ -43,6 +44,5 @@ void gameover( monster *z );      // Game over!  Defense mode
 } //namespace mdeath
 
 void make_mon_corpse( monster *z, int damageLvl );
-void make_gibs( monster *z, int amount );
 
 #endif

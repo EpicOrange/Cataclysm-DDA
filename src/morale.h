@@ -1,3 +1,4 @@
+#pragma once
 #ifndef MORALE_H
 #define MORALE_H
 
@@ -43,9 +44,12 @@ class player_morale
         void decay( int ticks = 1 );
         /** Displays morale screen */
         void display( double focus_gain );
+        /** Returns false whether morale is inconsistent with the argument.
+         *  Only permanent morale is checked */
+        bool consistent_with( const player_morale &morale ) const;
 
-        void on_mutation_gain( const std::string &mid );
-        void on_mutation_loss( const std::string &mid );
+        void on_mutation_gain( const trait_id &mid );
+        void on_mutation_loss( const trait_id &mid );
         void on_stat_change( const std::string &stat, int value );
         void on_item_wear( const item &it );
         void on_item_takeoff( const item &it );
@@ -85,6 +89,7 @@ class player_morale
                 bool is_expired() const;
                 bool is_permanent() const;
                 bool matches( morale_type _type, const itype *_item_type = nullptr ) const;
+                bool matches( const morale_point &mp ) const;
 
                 void add( int new_bonus, int new_max_bonus, int new_duration,
                           int new_decay_start, bool new_cap );
@@ -115,14 +120,15 @@ class player_morale
         void set_prozac( bool new_took_prozac );
         void set_stylish( bool new_stylish );
         void set_worn( const item &it, bool worn );
-        void set_mutation( const std::string &mid, bool active );
-        bool has_mutation( const std::string &mid );
+        void set_mutation( const trait_id &mid, bool active );
+        bool has_mutation( const trait_id &mid );
 
         void remove_if( const std::function<bool( const morale_point & )> &func );
         void remove_expired();
         void invalidate();
 
         void update_stylish_bonus();
+        void update_squeamish_penalty();
         void update_masochist_bonus();
         void update_bodytemp_penalty( int ticks );
         void update_constrained_penalty();
@@ -131,20 +137,21 @@ class player_morale
         std::vector<morale_point> points;
 
         struct body_part_data {
-            int covered;
-            int covered_fancy;
+            unsigned int covered;
+            unsigned int fancy;
+            unsigned int filthy;
             int hot;
             int cold;
 
             body_part_data() :
                 covered( 0 ),
-                covered_fancy( 0 ),
+                fancy( 0 ),
+                filthy( 0 ),
                 hot( 0 ),
                 cold( 0 ) {};
-            void mod_covered( const int delta );
-            void mod_covered_fancy( const int delta );
         };
         std::array<body_part_data, num_bp> body_parts;
+        body_part_data no_body_part;
 
         typedef std::function<void( player_morale *morale )> mutation_handler;
         struct mutation_data {
@@ -166,7 +173,9 @@ class player_morale
                 mutation_handler on_loss;
                 bool active;
         };
-        std::map<std::string, mutation_data> mutations;
+        std::map<trait_id, mutation_data> mutations;
+
+        std::map<std::string, int> super_fancy_items;
 
         // Mutability is required for lazy initialization
         mutable int level;
@@ -174,7 +183,6 @@ class player_morale
 
         bool took_prozac;
         bool stylish;
-        int super_fancy_bonus;
         int perceived_pain;
 };
 

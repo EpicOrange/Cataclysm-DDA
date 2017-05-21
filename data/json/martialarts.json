@@ -219,6 +219,12 @@
             "tec_krav_maga_precise",
             "tec_krav_maga_disarm",
             "tec_krav_maga_grab"
+        ],
+        "weapons" : [
+            "tonfa",
+            "tonfa_wood",
+            "shocktonfa_off",
+            "shocktonfa_on"
         ]
     },{
         "type" : "martial_art",
@@ -411,8 +417,6 @@
             "bio_blade_weapon",
             "bowling_pin",
             "cudgel",
-            "diamond_knife",
-            "diamond_machete",
             "diveknife",
             "firemachete_off",
             "firemachete_on",
@@ -422,6 +426,7 @@
             "javelin",
             "javelin_iron",
             "knife_combat",
+            "knife_hunting",
             "kris",
             "machete",
             "makeshift_halberd",
@@ -434,6 +439,7 @@
             "primitive_knife",
             "q_staff",
             "rebar",
+            "scimitar",
             "scythe",
             "scythe_war",
             "shock_staff",
@@ -453,7 +459,6 @@
             "tonfa",
             "tonfa_wood",
             "kukri",
-            "diamond_kukri",
             "knife_rambo",
             "knife_rm42",
             "switchblade",
@@ -490,12 +495,9 @@
         ],
         "weapons" : [
             "broadsword",
-            "diamond_broadsword",
             "broadfire_off",
             "broadfire_on",
-            "sword_forged",
             "rapier",
-            "diamond_rapier",
             "fencing_foil",
             "fencing_sabre",
             "fencing_epee",
@@ -507,7 +509,7 @@
         "type" : "martial_art",
         "id" : "style_niten",
         "name" : "Niten Ichi-Ryu",
-        "description" : "Niten Ichi-Ryu is an ancient school of combat, transmitting a style of classical Japanese swordsmanship conceived by the warrior Miyamoto Musashi.  It primarily focuses on the proper use of the katana and wakizashi, but includes staff techniques as well.",
+        "description" : "Niten Ichi-Ryu is an ancient school of combat, transmitting a style of classical Japanese swordsmanship conceived by the warrior Miyamoto Musashi.",
         "arm_block" : 99,
         "leg_block" : 99,
             "static_buffs" : [
@@ -568,20 +570,11 @@
         ],
         "weapons" : [
             "katana",
-            "diamond_katana",
             "firekatana_off",
             "firekatana_on",
             "bokken",
             "wakizashi",
-            "diamond_wakizashi",
-            "q_staff",
-            "i_staff",
-            "shock_staff",
-            "cudgel",
-            "nodachi",
-            "diamond_nodachi",
-            "l-stick",
-            "l-stick_on"
+            "nodachi"
         ]
     },{
         "type" : "martial_art",
@@ -633,8 +626,6 @@
             "cane",
             "cudgel",
             "cu_pipe",
-            "diamond_knife",
-            "diamond_machete",
             "diveknife",
             "fighter_sting",
             "firemachete_off",
@@ -642,6 +633,7 @@
             "glass_shiv",
             "hammer",
             "knife_combat",
+            "knife_hunting",
             "machete",
             "survivor_machete",
             "makeshift_knife",
@@ -649,6 +641,7 @@
             "pipe",
             "pockknife",
             "pool_cue",
+            "PR24-extended",
             "primitive_knife",
             "primitive_hammer",
             "punch_dagger",
@@ -664,7 +657,6 @@
             "wasp_sting",
             "wrench",
             "kukri",
-            "diamond_kukri",
             "knife_rambo",
             "knife_rm42",
             "l-stick",
@@ -940,7 +932,7 @@
             {
                 "id" : "venom_snake_combo_initiate",
                 "name" : "Viper Ambush",
-                "description" : "You've lured 'em in! Your next attack will be a Viper Bite.",
+                "description" : "You've lured 'em in!  Your next attack will be a Viper Bite.",
                 "unarmed_allowed" : true,
                 "min_unarmed" : 0,
                 "buff_duration" : 2,
@@ -953,7 +945,7 @@
             {
                 "id" : "venom_snake_combo_continue",
                 "name" : "Viper Lock",
-                "description" : "You bit true! Your next attack will be the Viper Strike!",
+                "description" : "You bit true!  Your next attack will be the Viper Strike!",
                 "unarmed_allowed" : true,
                 "min_unarmed" : 0,
                 "req_buffs" : [

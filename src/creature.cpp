@@ -12,6 +12,8 @@
 #include "itype.h"
 #include "vehicle.h"
 #include "debug.h"
+#include "field.h"
+#include "projectile.h"
 
 #include <algorithm>
 #include <numeric>
@@ -64,14 +66,6 @@ static std::map<int, std::map<body_part, double> > default_hit_weights = {
     }
 };
 
-struct weight_compare {
-    bool operator() (const std::pair<body_part, double> &left,
-                     const std::pair<body_part, double> &right)
-    {
-        return left.second < right.second;
-    }
-};
-
 const std::map<std::string, m_size> Creature::size_map = {
     {"TINY", MS_TINY}, {"SMALL", MS_SMALL}, {"MEDIUM", MS_MEDIUM},
     {"LARGE", MS_LARGE}, {"HUGE", MS_HUGE} };
@@ -102,6 +96,12 @@ void Creature::reset()
     reset_bonuses();
     reset_stats();
 }
+
+void Creature::bleed() const
+{
+    g->m.add_splatter( bloodType(), pos() );
+}
+
 void Creature::reset_bonuses()
 {
     num_blocks = 1;
@@ -127,13 +127,6 @@ void Creature::reset_bonuses()
     throw_resist = 0;
 }
 
-void Creature::reset_stats()
-{
-    // "Creatures" have no stats!
-    // This only exists to simplify cleanup
-    // TODO: Make this not exist
-}
-
 void Creature::process_turn()
 {
     if(is_dead_state()) {
@@ -154,6 +147,25 @@ void Creature::process_turn()
 bool Creature::digging() const
 {
     return false;
+}
+
+
+bool Creature::is_dangerous_fields( const field &fld ) const
+{
+    // Else check each field to see if it's dangerous to us
+    for( auto &dfield : fld ) {
+        if( is_dangerous_field( dfield.second ) ) {
+            return true;
+        }
+    }
+    // No fields were found to be dangerous, so the field set isn't dangerous
+    return false;
+}
+
+bool Creature::is_dangerous_field( const field_entry &entry ) const
+{
+    // If it's dangerous and we're not immune return true, else return false
+    return entry.is_dangerous() && !is_immune_field(entry.getFieldType());
 }
 
 bool Creature::sees( const Creature &critter ) const
@@ -204,12 +216,14 @@ bool Creature::sees( const tripoint &t, bool is_player ) const
         return false;
     }
 
-    const int range_cur = sight_range( g->m.ambient_light_at(t) );
+    const int range_cur = sight_range( g->m.ambient_light_at( t ) );
     const int range_day = sight_range( DAYLIGHT_LEVEL );
-    const int range_min = std::min( range_cur, range_day );
+    const int range_night = sight_range( 0 );
+    const int range_max = std::max( range_day, range_night );
+    const int range_min = std::min( range_cur, range_max );
     const int wanted_range = rl_dist( pos(), t );
     if( wanted_range <= range_min ||
-        ( wanted_range <= range_day &&
+        ( wanted_range <= range_max &&
           g->m.ambient_light_at( t ) > g->natural_light_level( t.z ) ) ) {
         int range = 0;
         if( g->m.ambient_light_at( t ) > g->natural_light_level( t.z ) ) {
@@ -372,9 +386,28 @@ void Creature::melee_attack(Creature &t, bool allow_special)
  * Damage-related functions
  */
 
+int size_melee_penalty( m_size target_size )
+{
+    switch( target_size ) {
+        case MS_TINY:
+            return 30;
+        case MS_SMALL:
+            return 15;
+        case MS_MEDIUM:
+            return 0;
+        case MS_LARGE:
+            return -10;
+        case MS_HUGE:
+            return -20;
+    }
+
+    debugmsg( "Invalid target size %d", target_size );
+    return 0;
+}
+
 int Creature::deal_melee_attack( Creature *source, int hitroll )
 {
-    int hit_spread = hitroll - dodge_roll();
+    int hit_spread = hitroll - dodge_roll() - size_melee_penalty( get_size() );
 
     // If attacker missed call targets on_dodge event
     if( hit_spread <= 0 && !source->is_hallucination() ) {
@@ -501,27 +534,29 @@ void Creature::deal_projectile_attack( Creature *source, dealt_projectile_attack
     std::string message = "";
     game_message_type gmtSCTcolor = m_neutral;
 
-    if( goodhit < 0.1 ) {
+    if( goodhit < accuracy_headshot ) {
         message = _("Headshot!");
         gmtSCTcolor = m_headshot;
         damage_mult *= rng_float(2.45, 3.35);
         bp_hit = bp_head; // headshot hits the head, of course
-    } else if( goodhit < 0.2 ) {
+
+    } else if( goodhit < accuracy_critical ) {
         message = _("Critical!");
         gmtSCTcolor = m_critical;
         damage_mult *= rng_float(1.75, 2.3);
-    } else if( goodhit < 0.4 ) {
+
+    } else if( goodhit < accuracy_goodhit ) {
         message = _("Good hit!");
         gmtSCTcolor = m_good;
         damage_mult *= rng_float(1, 1.5);
-    } else if( goodhit < 0.6 ) {
+
+    } else if( goodhit < accuracy_standard ) {
         damage_mult *= rng_float(0.5, 1);
-    } else if( goodhit < 0.8 ) {
+
+    } else if( goodhit < accuracy_grazing ) {
         message = _("Grazing hit.");
         gmtSCTcolor = m_grazing;
         damage_mult *= rng_float(0, .25);
-    } else {
-        damage_mult *= 0;
     }
 
     if( source != nullptr && !message.empty() ) {
@@ -532,14 +567,18 @@ void Creature::deal_projectile_attack( Creature *source, dealt_projectile_attack
 
     // copy it, since we're mutating
     damage_instance impact = proj.impact;
-    if( proj_effects.count("NOGIB") > 0 ) {
-        impact.add_effect("NOGIB");
-    }
     if( damage_mult > 0.0f && proj_effects.count( "NO_DAMAGE_SCALING" ) ) {
         damage_mult = 1.0f;
     }
 
     impact.mult_damage(damage_mult);
+
+    if( proj_effects.count( "NOGIB" ) > 0 ) {
+        float dmg_ratio = (float)impact.total_damage() / get_hp_max( player::bp_to_hp( bp_hit ) );
+        if( dmg_ratio > 1.25f ) {
+            impact.mult_damage( 1.0f / dmg_ratio );
+        }
+    }
 
     dealt_dam = deal_damage(source, bp_hit, impact);
     dealt_dam.bp_hit = bp_hit;
@@ -549,26 +588,26 @@ void Creature::deal_projectile_attack( Creature *source, dealt_projectile_attack
         if (made_of( material_id( "veggy" ) ) || made_of( material_id( "cotton" ) ) ||
             made_of( material_id( "wool" ) ) || made_of( material_id( "paper" ) ) ||
             made_of( material_id( "wood" ) ) ) {
-            add_effect( effect_onfire, rng(8, 20));
+            add_effect( effect_onfire, rng(8, 20), bp_hit );
         } else if (made_of( material_id( "flesh" ) ) || made_of( material_id( "iflesh" ) ) ) {
-            add_effect( effect_onfire, rng(5, 10));
+            add_effect( effect_onfire, rng(5, 10), bp_hit );
         }
     } else if (proj.proj_effects.count("INCENDIARY") ) {
         if (made_of( material_id( "veggy" ) ) || made_of( material_id( "cotton" ) ) ||
             made_of( material_id( "wool" ) ) || made_of( material_id( "paper" ) ) ||
             made_of( material_id( "wood" ) ) ) {
-            add_effect( effect_onfire, rng(2, 6));
+            add_effect( effect_onfire, rng(2, 6), bp_hit );
         } else if ( (made_of( material_id( "flesh" ) ) || made_of( material_id( "iflesh" ) ) ) &&
                     one_in(4) ) {
-            add_effect( effect_onfire, rng(1, 4));
+            add_effect( effect_onfire, rng(1, 4), bp_hit );
         }
     } else if (proj.proj_effects.count("IGNITE")) {
         if (made_of( material_id( "veggy" ) ) || made_of( material_id( "cotton" ) ) ||
             made_of( material_id( "wool" ) ) || made_of( material_id( "paper" ) ) ||
             made_of( material_id( "wood" ) ) ) {
-            add_effect( effect_onfire, rng(6, 6));
+            add_effect( effect_onfire, rng(6, 6), bp_hit );
         } else if (made_of( material_id( "flesh" ) ) || made_of( material_id( "iflesh" ) ) ) {
-            add_effect( effect_onfire, rng(10, 10));
+            add_effect( effect_onfire, rng(10, 10), bp_hit );
         }
     }
 
@@ -653,6 +692,7 @@ void Creature::deal_projectile_attack( Creature *source, dealt_projectile_attack
             }
         }
     }
+
     check_dead_state();
     attack.hit_critter = this;
     attack.missed_by = goodhit;
@@ -668,31 +708,26 @@ dealt_damage_instance Creature::deal_damage(Creature *source, body_part bp,
     int total_pain = 0;
     damage_instance d = dam; // copy, since we will mutate in absorb_hit
 
-    std::vector<int> dealt_dams(NUM_DT, 0);
+    dealt_damage_instance dealt_dams;
 
     absorb_hit(bp, d);
 
-    // add up all the damage units dealt
-    int cur_damage;
-    for (std::vector<damage_unit>::const_iterator it = d.damage_units.begin();
-         it != d.damage_units.end(); ++it) {
-        cur_damage = 0;
-        deal_damage_handle_type(*it, bp, cur_damage, total_pain);
-        if (cur_damage > 0) {
-            dealt_dams[it->type] += cur_damage;
+    // Add up all the damage units dealt
+    for( const auto &it : d.damage_units ) {
+        int cur_damage = 0;
+        deal_damage_handle_type( it, bp, cur_damage, total_pain );
+        if( cur_damage > 0 ) {
+            dealt_dams.dealt_dams[ it.type ] += cur_damage;
             total_damage += cur_damage;
         }
     }
 
     mod_pain(total_pain);
-    if( dam.effects.count("NOGIB") ) {
-        total_damage = std::min( total_damage, get_hp() + 1 );
-    }
 
-    apply_damage(source, bp, total_damage);
-    return dealt_damage_instance(dealt_dams);
+    apply_damage( source, bp, total_damage );
+    return dealt_dams;
 }
-void Creature::deal_damage_handle_type(const damage_unit &du, body_part, int &damage, int &pain)
+void Creature::deal_damage_handle_type(const damage_unit &du, body_part bp, int &damage, int &pain)
 {
     // Handles ACIDPROOF, electric immunity etc.
     if( is_immune_damage( du.type ) ) {
@@ -701,46 +736,41 @@ void Creature::deal_damage_handle_type(const damage_unit &du, body_part, int &da
 
     // Apply damage multiplier from skill, critical hits or grazes after all other modifications.
     const int adjusted_damage = du.amount * du.damage_multiplier;
-    switch (du.type) {
-    case DT_BASH:
-        damage += adjusted_damage;
-        // add up pain before using mod_pain since certain traits modify that
-        pain += adjusted_damage / 4;
-        mod_moves(-rng(0, damage * 2)); // bashing damage reduces moves
-        break;
-    case DT_CUT:
-        damage += adjusted_damage;
-        pain += (adjusted_damage + sqrt(double(adjusted_damage))) / 4;
-        break;
-    case DT_STAB: // stab differs from cut in that it ignores some armor
-        damage += adjusted_damage;
-        pain += (adjusted_damage + sqrt(double(adjusted_damage))) / 4;
-        break;
-    case DT_HEAT: // heat damage sets us on fire sometimes
-        damage += adjusted_damage;
-        pain += adjusted_damage / 4;
-        if( rng(0, 100) < adjusted_damage ) {
-            add_effect( effect_onfire, rng(1, 3));
-        }
-        break;
-    case DT_ELECTRIC: // Electrical damage adds a major speed/dex debuff
-        damage += adjusted_damage;
-        pain += adjusted_damage / 4;
-        add_effect( effect_zapped, std::max( adjusted_damage, 2 ) );
-        break;
-    case DT_COLD: // cold damage slows us a bit and hurts less
-        damage += adjusted_damage;
-        pain += adjusted_damage / 6;
-        mod_moves(-adjusted_damage * 80);
-        break;
-    case DT_ACID: // Acid damage and acid burns are super painful
-        damage += adjusted_damage;
-        pain += adjusted_damage / 3;
-        break;
-    default:
-        damage += adjusted_damage;
-        pain += adjusted_damage / 4;
+    if( adjusted_damage <= 0 ) {
+        return;
     }
+
+    float div = 4.0f;
+
+    switch( du.type ) {
+        case DT_BASH:
+            // Bashing damage is less painful
+            div = 5.0f;
+            break;
+
+        case DT_HEAT:
+            // heat damage sets us on fire sometimes
+            if( rng( 0, 100 ) < adjusted_damage ) {
+                add_effect( effect_onfire, rng( 1, 3 ), bp );
+            }
+            break;
+
+        case DT_ELECTRIC:
+            // Electrical damage adds a major speed/dex debuff
+            add_effect( effect_zapped, std::max( adjusted_damage, 2 ) );
+            break;
+
+        case DT_ACID:
+            // Acid damage and acid burns are more painful
+            div = 3.0f;
+            break;
+
+        default:
+            break;
+    }
+
+    damage += adjusted_damage;
+    pain += roll_remainder( adjusted_damage / div );
 }
 
 /*
@@ -760,15 +790,6 @@ bool Creature::is_fake() const
 void Creature::set_fake(const bool fake_value)
 {
     fake = fake_value;
-}
-
-/*
- * Effect-related methods
- */
-bool Creature::move_effects(bool attacking)
-{
-    (void)attacking;
-    return true;
 }
 
 void Creature::add_eff_effects(effect e, bool reduced)
@@ -1051,7 +1072,7 @@ bool Creature::resists_effect(effect e)
     return false;
 }
 
-bool Creature::has_trait(const std::string &flag) const
+bool Creature::has_trait( const trait_id &flag ) const
 {
     (void)flag;
     return false;
@@ -1185,15 +1206,11 @@ int Creature::get_speed() const
 {
     return get_speed_base() + get_speed_bonus();
 }
-int Creature::get_dodge() const
+float Creature::get_dodge() const
 {
     return get_dodge_base() + get_dodge_bonus();
 }
-int Creature::get_melee() const
-{
-    return 0;
-}
-int Creature::get_hit() const
+float Creature::get_hit() const
 {
     return get_hit_base() + get_hit_bonus();
 }
@@ -1202,19 +1219,11 @@ int Creature::get_speed_base() const
 {
     return speed_base;
 }
-int Creature::get_dodge_base() const
-{
-    return 0;
-}
-int Creature::get_hit_base() const
-{
-    return 0;
-}
 int Creature::get_speed_bonus() const
 {
     return speed_bonus;
 }
-int Creature::get_dodge_bonus() const
+float Creature::get_dodge_bonus() const
 {
     return dodge_bonus;
 }
@@ -1222,7 +1231,7 @@ int Creature::get_block_bonus() const
 {
     return block_bonus; //base is 0
 }
-int Creature::get_hit_bonus() const
+float Creature::get_hit_bonus() const
 {
     return hit_bonus; //base is 0
 }
@@ -1258,7 +1267,7 @@ int Creature::get_throw_resist() const
     return throw_resist;
 }
 
-void Creature::mod_stat( const std::string &stat, int modifier )
+void Creature::mod_stat( const std::string &stat, float modifier )
 {
     if( stat == "speed" ) {
         mod_speed_bonus( modifier );
@@ -1308,7 +1317,7 @@ void Creature::set_speed_bonus(int nspeed)
 {
     speed_bonus = nspeed;
 }
-void Creature::set_dodge_bonus(int ndodge)
+void Creature::set_dodge_bonus( float ndodge )
 {
     dodge_bonus = ndodge;
 }
@@ -1316,7 +1325,7 @@ void Creature::set_block_bonus(int nblock)
 {
     block_bonus = nblock;
 }
-void Creature::set_hit_bonus(int nhit)
+void Creature::set_hit_bonus( float nhit )
 {
     hit_bonus = nhit;
 }
@@ -1332,7 +1341,7 @@ void Creature::mod_speed_bonus(int nspeed)
 {
     speed_bonus += nspeed;
 }
-void Creature::mod_dodge_bonus(int ndodge)
+void Creature::mod_dodge_bonus( float ndodge )
 {
     dodge_bonus += ndodge;
 }
@@ -1340,7 +1349,7 @@ void Creature::mod_block_bonus(int nblock)
 {
     block_bonus += nblock;
 }
-void Creature::mod_hit_bonus(int nhit)
+void Creature::mod_hit_bonus( float nhit )
 {
     hit_bonus += nhit;
 }
@@ -1450,14 +1459,9 @@ bool Creature::is_symbol_highlighted() const
 body_part Creature::select_body_part(Creature *source, int hit_roll) const
 {
     // Get size difference (-1,0,1);
-    int szdif = source->get_size() - get_size();
-    if(szdif < -1) {
-        szdif = -1;
-    } else if (szdif > 1) {
-        szdif = 1;
-    }
+    int szdif = std::min( 1, std::max( -1, source->get_size() - get_size() ) );
 
-    add_msg( m_debug, "hit roll = %d", hit_roll);
+    add_msg( m_debug, "hit roll = %d", hit_roll );
     add_msg( m_debug, "source size = %d", source->get_size() );
     add_msg( m_debug, "target size = %d", get_size() );
     add_msg( m_debug, "difference = %d", szdif );
@@ -1514,13 +1518,28 @@ body_part Creature::select_body_part(Creature *source, int hit_roll) const
     return selected_part;
 }
 
-bool Creature::compare_by_dist_to_point::operator()( const Creature* const a, const Creature* const b ) const
-{
-    return rl_dist( a->pos(), center ) < rl_dist( b->pos(), center );
-}
-
 void Creature::check_dead_state() {
     if( is_dead_state() ) {
         die( nullptr );
     }
+}
+
+std::pair<std::string, nc_color> const &Creature::get_attitude_ui_data( Attitude att )
+{
+    using pair_t = std::pair<std::string, nc_color>;
+    static std::array<pair_t, 5> const strings {
+        {
+            pair_t {_( "Hostile" ), c_red},
+            pair_t {_( "Neutral" ), h_white},
+            pair_t {_( "Friendly" ), c_green},
+            pair_t {_( "Any" ), c_yellow},
+            pair_t {_( "BUG: Behavior unnamed. (Creature::get_attitude_ui_data)" ), h_red}
+        }
+    };
+
+    if( ( int ) att < 0 || ( int ) att >= ( int ) strings.size() ) {
+        return strings.back();
+    }
+
+    return strings[att];
 }
