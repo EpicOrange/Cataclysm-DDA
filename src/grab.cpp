@@ -135,10 +135,13 @@ bool game::grabbed_veh_move( const tripoint &dp )
         return false;
     } else {
         // Otherwise, this is a pull
-        veh_move_dir_first_try = part_to_new_player_pos;
-        veh_move_dir_first_try.x = std::min(1, std::max(-1, veh_move_dir_first_try.x));
-        veh_move_dir_first_try.y = std::min(1, std::max(-1, veh_move_dir_first_try.y));
-        new_grab_first_try = -veh_move_dir_first_try;
+        tileray ray;
+        ray.init( part_to_new_player_pos.x, part_to_new_player_pos.y );
+        ray.advance(1);
+        veh_move_dir_first_try.x = ray.dx();
+        veh_move_dir_first_try.y = ray.dy();
+        // add new_player_pos_to_part and veh_move_dir vectors to get new grab vector
+        new_grab_first_try = -part_to_new_player_pos + veh_move_dir_first_try;
 
         veh_move_dir_second_try = part_to_old_player_pos;
         new_grab_second_try = -dp;
