@@ -776,6 +776,8 @@ class game
         bool plmove(int dx, int dy, int dz = 0);
         // Handle pushing during move, returns true if it handled the move
         bool grabbed_move( const tripoint &dp );
+        bool grabbed_veh_move_str_check( const vehicle* grabbed_vehicle );
+        void grabbed_veh_move_handle_traps( vehicle* grabbed_vehicle, int grabbed_part );
         bool grabbed_veh_move( const tripoint &dp );
         bool grabbed_furn_move( const tripoint &dp );
         // Handle moving from a ramp
@@ -978,6 +980,7 @@ private:
 
         void move_save_to_graveyard();
         bool save_player_data();
+
 };
 
 #endif

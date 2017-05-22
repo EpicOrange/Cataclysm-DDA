@@ -5,54 +5,7 @@
 #include "messages.h"
 #include "sounds.h"
 
-/*
-bool game::grabbed_veh_move( const tripoint &dp )
-{
-    int grabbed_part = 0;
-    vehicle *grabbed_vehicle = m.veh_at( u.pos() + u.grab_point, grabbed_part );
-    if( nullptr == grabbed_vehicle ) {
-        add_msg( m_info, _( "No vehicle at grabbed point." ) );
-        u.grab_point = tripoint_zero;
-        u.grab_type = OBJECT_NONE;
-        return false;
-    }
-
-    const vehicle *veh_under_player = m.veh_at( u.pos() );
-    if( grabbed_vehicle == veh_under_player ) {
-        u.grab_point = -dp;
-        return false;
-    }
-
-    tripoint dp_veh = -u.grab_point;
-    tripoint prev_grab = u.grab_point;
-    tripoint next_grab = u.grab_point;
-
-    bool zigzag = false;
-
-    if( dp == prev_grab ) {
-        // We are pushing in the direction of veh
-        dp_veh = dp;
-    } else if( abs( dp.x + dp_veh.x ) != 2 && abs( dp.y + dp_veh.y ) != 2 ) {
-        // Not actually moving the vehicle, don't do the checks
-        u.grab_point = -( dp + dp_veh );
-        return false;
-    } else if( ( dp.x == prev_grab.x || dp.y == prev_grab.y ) &&
-               next_grab.x != 0 && next_grab.y != 0 ) {
-        // Zig-zag (or semi-zig-zag) pull: player is diagonal to veh
-        // and moves away from it, but not directly away
-        dp_veh.x = ( dp.x == -dp_veh.x ) ? 0 : dp_veh.x;
-        dp_veh.y = ( dp.y == -dp_veh.y ) ? 0 : dp_veh.y;
-
-        next_grab = -dp_veh;
-        zigzag = true;
-    } else {
-        // We are pulling the veh
-        next_grab = -dp;
-    }
-
-    // Make sure the mass and pivot point are correct
-    grabbed_vehicle->invalidate_mass();
-
+bool game::grabbed_veh_move_str_check( const vehicle *grabbed_vehicle ) {
     //vehicle movement: strength check
     int mc = 0;
     int str_req = ( grabbed_vehicle->total_mass() / 25 ); //strengh reqired to move vehicle.
@@ -64,7 +17,7 @@ bool game::grabbed_veh_move( const tripoint &dp )
     if( str_req > 45 ) {
         add_msg( m_info, _( "The %s is too bulky for you to move by hand." ),
                  grabbed_vehicle->name.c_str() );
-        return true; // No shoving around an RV.
+        return false; // No shoving around an RV.
     }
 
     const auto &wheel_indices = grabbed_vehicle->wheelcache;
@@ -81,7 +34,7 @@ bool game::grabbed_veh_move( const tripoint &dp )
         if( wheel_indices.size() > 4 || wheel_indices.size() == 1 ) {
             str_req = mc / 4 + 1;
         } else {
-            str_req = mc / wheel_indices.size() + 1;
+            str_req = (int) (mc / wheel_indices.size() + 1);
         }
     } else {
         str_req++;
@@ -107,17 +60,105 @@ bool game::grabbed_veh_move( const tripoint &dp )
             u.moves -= 200;
             add_msg( _( "It takes some time to move the %s." ), grabbed_vehicle->name.c_str() );
         }
+        return true;
     } else {
         u.moves -= 100;
         add_msg( m_bad, _( "You lack the strength to move the %s" ), grabbed_vehicle->name.c_str() );
+        return false;
+    }
+}
+
+void game::grabbed_veh_move_handle_traps( vehicle *grabbed_vehicle, int grabbed_part )
+{
+    const auto &wheel_indices = grabbed_vehicle->wheelcache;
+    for( int p : wheel_indices ) {
+        if( one_in( 2 ) ) {
+            tripoint wheel_p = grabbed_vehicle->global_part_pos3( grabbed_part );
+            grabbed_vehicle->handle_trap( wheel_p, p );
+        }
+    }
+}
+
+//*
+bool game::grabbed_veh_move( const tripoint &dp )
+{
+    // check if vehicle exists
+    int grabbed_part = 0;
+    vehicle *grabbed_vehicle = m.veh_at( u.pos() + u.grab_point, grabbed_part );
+    if( nullptr == grabbed_vehicle ) {
+        add_msg( m_info, _( "No vehicle at grabbed point." ) );
+        u.grab_point = tripoint_zero;
+        u.grab_type = OBJECT_NONE;
+        return false;
+    }
+
+    // if we are standing on the vehicle, shift grab point instead of moving the vehicle
+    const vehicle *veh_under_player = m.veh_at( u.pos() );
+    if( grabbed_vehicle == veh_under_player ) {
+        u.grab_point = -dp;
+        return false;
+    }
+
+    // TODO remove debug code
+    add_msg( m_warning, "u.pos() = (%d, %d), dp = (%d, %d), u.grab_point = (%d, %d)",
+             u.pos().x, u.pos().y, dp.x, dp.y, u.grab_point.x, u.grab_point.y );
+
+    tripoint part_to_old_player_pos = -u.grab_point;
+    tripoint part_to_new_player_pos = part_to_old_player_pos + dp;
+
+    tripoint veh_move_dir_first_try = tripoint_zero;
+    tripoint new_grab_first_try = tripoint_zero;
+    tripoint veh_move_dir_second_try = tripoint_zero;
+    tripoint new_grab_second_try = tripoint_zero;
+
+    /* We will try twice in case the path to the new player's position is blocked.
+     *
+     *     o   Shopping cart
+     *     #@  Shrub, Player (moving southwest)
+     *
+     * veh_move_dir_first_try would try to move the shopping cart south, which fails
+     * veh_move_dir_second_try would try to move the shopping cart southeast, which succeeds
+     */
+
+    if( part_to_new_player_pos == tripoint_zero ) {
+        // Player's new position is equal to the grabbed part's position
+        // This is a push
+        veh_move_dir_first_try = u.grab_point;
+        new_grab_first_try = -u.grab_point;
+        add_msg(m_info, "Push");
+    } else if( abs( part_to_new_player_pos.x ) <= 1 &&
+               abs( part_to_new_player_pos.y ) <= 1 ) {
+        // Player's new position is still adjacent to the grabbed part
+        // Not actually moving the vehicle; don't do the checks
+        u.grab_point = -part_to_new_player_pos;
+        add_msg(m_info, "Pivot");
+        return false;
+    } else {
+        // Otherwise, this is a pull
+        veh_move_dir_first_try = part_to_new_player_pos;
+        veh_move_dir_first_try.x = std::min(1, std::max(-1, veh_move_dir_first_try.x));
+        veh_move_dir_first_try.y = std::min(1, std::max(-1, veh_move_dir_first_try.y));
+        new_grab_first_try = -veh_move_dir_first_try;
+
+        veh_move_dir_second_try = part_to_old_player_pos;
+        new_grab_second_try = -dp;
+        add_msg(m_info, "Pull");
+    }
+
+    // Make sure the mass and pivot point are correct
+    grabbed_vehicle->invalidate_mass();
+
+    // if player can't move the vehicle, stop
+    if( !grabbed_veh_move_str_check( grabbed_vehicle ) ) {
         return true;
     }
 
+    // try to move the vehicle
     std::string blocker_name = _( "errors in movement code" );
-    const auto get_move_dir = [&]( const tripoint & dir, const tripoint & from ) {
+    const auto get_move_dir = [&]( const tripoint & move_vector, const tripoint & new_grab ) {
         tileray mdir;
 
-        mdir.init( dir.x, dir.y );
+        mdir.init( move_vector.x, move_vector.y );
         grabbed_vehicle->turn( mdir.dir() - grabbed_vehicle->face.dir() );
         grabbed_vehicle->face = grabbed_vehicle->turn_dir;
         grabbed_vehicle->precalc_mounts( 1, mdir.dir(), grabbed_vehicle->pivot_point() );
@@ -126,8 +167,12 @@ bool game::grabbed_veh_move( const tripoint &dp )
         // and in roughly the same direction.
         const tripoint new_part_pos = grabbed_vehicle->global_pos3() +
                                       grabbed_vehicle->parts[ grabbed_part ].precalc[ 1 ];
-        const tripoint expected_pos = u.pos() + dp + from;
+        const tripoint expected_pos = u.pos() + dp + new_grab;
         const tripoint actual_dir = expected_pos - new_part_pos;
+
+        // TODO remove debug code
+        add_msg( m_warning, "move_vector = (%d, %d), new_grab = (%d, %d)",
+                 move_vector.x, move_vector.y, new_grab.x, new_grab.y );
 
         // Set player location to illegal value so it can't collide with vehicle.
         const tripoint player_prev = u.pos();
@@ -141,22 +186,19 @@ bool game::grabbed_veh_move( const tripoint &dp )
         return failed ? tripoint_zero : actual_dir;
     };
 
-    // First try the move as intended
-    // But if that fails and the move is a zig-zag, try to recover:
-    // Try to place the vehicle in the position player just left rather than "flattening" the zig-zag
-    tripoint final_dp_veh = get_move_dir( dp_veh, next_grab );
-    if( final_dp_veh == tripoint_zero && zigzag ) {
-        final_dp_veh = get_move_dir( -prev_grab, -dp );
-        next_grab = -dp;
+    tripoint final_dp_veh = get_move_dir( veh_move_dir_first_try, new_grab_first_try );
+    tripoint new_grab = new_grab_first_try;
+    if( final_dp_veh == tripoint_zero && veh_move_dir_second_try != tripoint_zero ) {
+        final_dp_veh = get_move_dir( veh_move_dir_second_try, new_grab_second_try );
+        new_grab = new_grab_second_try;
     }
 
     if( final_dp_veh == tripoint_zero ) {
         add_msg( _( "The %s collides with %s." ), grabbed_vehicle->name.c_str(), blocker_name.c_str() );
-        u.grab_point = prev_grab;
         return true;
     }
 
-    u.grab_point = next_grab;
+    u.grab_point = new_grab;
 
     tripoint gp = grabbed_vehicle->global_pos3();
     grabbed_vehicle = m.displace_vehicle( gp, final_dp_veh );
@@ -166,12 +208,8 @@ bool game::grabbed_veh_move( const tripoint &dp )
         return false;
     }
 
-    for( int p : wheel_indices ) {
-        if( one_in( 2 ) ) {
-            tripoint wheel_p = grabbed_vehicle->global_part_pos3( grabbed_part );
-            grabbed_vehicle->handle_trap( wheel_p, p );
-        }
-    }
+    grabbed_veh_move_handle_traps( grabbed_vehicle, grabbed_part );
+
 
     return false;
 
@@ -256,7 +294,9 @@ bool game::grabbed_veh_move( const tripoint &dp )
         tripoint d_part( movement_of_part_ray.dx(), movement_of_part_ray.dy(), 0 );
         tripoint destination = u.grab_point + d_part;
         tripoint com_relative_to_vehicle;
-        grabbed_vehicle->rotated_center_of_mass( com_relative_to_vehicle.x, com_relative_to_vehicle.y );
+        point com = grabbed_vehicle->rotated_center_of_mass();
+        com_relative_to_vehicle.x = com.x;
+        com_relative_to_vehicle.y = com.y;
         // COM relative to player = u.grab_point + COM relative to vehicle - grabbed part relative to vehicle
         tripoint com = u.grab_point + ( com_relative_to_vehicle - grabbed_vehicle->parts[grabbed_part].precalc[0] );
 
